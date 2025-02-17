@@ -91,7 +91,7 @@ const testimonials = [
     rating: 5,
   },
   {
-    name: 'Emma Williams',
+    name: 'Emma Чупакабра',
     image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
     text: 'Professional service and amazing results. Will definitely order again!',
     rating: 5,
