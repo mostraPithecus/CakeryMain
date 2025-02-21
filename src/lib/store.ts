@@ -1,33 +1,52 @@
 import { create } from 'zustand';
-import { supabase } from './supabase';
-import { notifyNewOrder } from './telegram';
-import toast from 'react-hot-toast';
-import type { Product, Category, Tag, Order } from './database.types';
+import type { Product, Category, Tag } from './database.types';
+import { v4 as uuidv4 } from 'uuid';
+
+// Import data from TypeScript file
+import { products as productData, categories as categoryData, tags as tagData } from '../data/data';
+
+// Helper function to convert numeric or string IDs to deterministic format
+function convertToUUID(id: string): string {
+  // If it's already a UUID, return it
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    return id;
+  }
+  
+  // Return the original ID
+  return id;
+}
 
 interface CartItem {
   product: Product;
   quantity: number;
-  notes?: string;
 }
 
-interface StoreState {
+interface Store {
+  // State
   products: Product[];
   categories: Category[];
   tags: Tag[];
   cart: CartItem[];
   isLoading: boolean;
   error: string | null;
+
+  // Cart actions
+  addToCart: (product: Product) => void;
+  removeFromCart: (productId: string) => void;
+  updateCartItem: (productId: string, quantity: number) => void;
+  clearCart: () => void;
+
+  // Data fetching
   fetchProducts: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchTags: () => Promise<void>;
-  addToCart: (product: Product, quantity: number, notes?: string) => void;
-  removeFromCart: (productId: string) => void;
-  updateCartItem: (productId: string, quantity: number, notes?: string) => void;
-  clearCart: () => void;
-  submitOrder: (customerInfo: Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'>) => Promise<void>;
+
+  // Order submission
+  submitOrder: (orderData: any) => Promise<void>;
 }
 
-export const useStore = create<StoreState>((set, get) => ({
+export const useStore = create<Store>((set, get) => ({
+  // Initial state
   products: [],
   categories: [],
   tags: [],
@@ -35,171 +54,144 @@ export const useStore = create<StoreState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  // Fetch all products with their categories and tags
-  fetchProducts: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          category:categories(*),
-          tags:product_tags(tag:tags(*))
-        `);
-      
-      if (error) throw error;
-      set({ products: data, isLoading: false });
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false });
-    }
-  },
-
-  // Fetch all product categories
-  fetchCategories: async () => {
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*');
-      
-      if (error) throw error;
-      set({ categories: data });
-    } catch (error) {
-      set({ error: (error as Error).message });
-    }
-  },
-
-  // Fetch all product tags
-  fetchTags: async () => {
-    try {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*');
-      
-      if (error) throw error;
-      set({ tags: data });
-    } catch (error) {
-      set({ error: (error as Error).message });
-    }
-  },
-
-  // Add a product to the shopping cart
-  addToCart: (product, quantity, notes) => {
-    const cart = get().cart;
+  // Cart actions
+  addToCart: (product) => {
+    const { cart } = get();
     const existingItem = cart.find(item => item.product.id === product.id);
 
     if (existingItem) {
       set({
         cart: cart.map(item =>
           item.product.id === product.id
-            ? { ...item, quantity: item.quantity + quantity, notes }
+            ? { ...item, quantity: item.quantity + 1 }
             : item
         ),
       });
     } else {
-      set({ cart: [...cart, { product, quantity, notes }] });
+      set({ cart: [...cart, { product, quantity: 1 }] });
     }
-
-    // Show success message
-    toast.success(`Added ${product.name} to cart`);
   },
 
-  // Remove a product from the cart
   removeFromCart: (productId) => {
-    set({ cart: get().cart.filter(item => item.product.id !== productId) });
-  },
-
-  // Update quantity or notes for a cart item
-  updateCartItem: (productId, quantity, notes) => {
+    const { cart } = get();
     set({
-      cart: get().cart.map(item =>
-        item.product.id === productId
-          ? { ...item, quantity, notes }
-          : item
-      ),
+      cart: cart.filter(item => item.product.id !== productId),
     });
   },
 
-  // Clear the entire shopping cart
+  updateCartItem: (productId, quantity) => {
+    const { cart } = get();
+    if (quantity === 0) {
+      set({
+        cart: cart.filter(item => item.product.id !== productId),
+      });
+    } else {
+      set({
+        cart: cart.map(item =>
+          item.product.id === productId
+            ? { ...item, quantity }
+            : item
+        ),
+      });
+    }
+  },
+
   clearCart: () => {
     set({ cart: [] });
   },
 
-  // Submit an order and send notification to Telegram
-  submitOrder: async (customerInfo) => {
-    const cart = get().cart;
-    if (cart.length === 0) {
-      throw new Error('Cart is empty');
-    }
-
+  // Fetch products
+  fetchProducts: async () => {
+    set({ isLoading: true, error: null });
     try {
-      // Test database connection first
-      const { data: testData, error: testError } = await supabase
-        .from('orders')
-        .select('*')
-        .limit(1);
-
-      if (testError) {
-        console.error('Database connection test error:', testError);
-        throw new Error(`Database connection failed: ${testError.message}`);
-      }
-      console.log('Database connection successful, found orders:', testData);
-
-      // 1. Create the order in the database
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert([{
-          ...customerInfo,
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
-
-      if (orderError) {
-        console.error('Order creation error:', orderError);
-        throw new Error(`Failed to create order: ${orderError.message}`);
-      }
-
-      if (!order) {
-        throw new Error('Order was not created');
-      }
-
-      // 2. Create order items
-      const orderItems = cart.map(item => ({
-        order_id: order.id,
-        product_id: item.product.id,
-        quantity: item.quantity,
-        price: item.product.price,
-        notes: item.notes,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+      const now = new Date().toISOString();
+      
+      // Add timestamps and convert IDs to UUIDs
+      const products = productData.map(product => ({
+        ...product,
+        id: convertToUUID(product.id),
+        category_id: convertToUUID(product.category_id),
+        created_at: now,
+        updated_at: now
       }));
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-
-      if (itemsError) {
-        console.error('Order items creation error:', itemsError);
-        throw new Error(`Failed to create order items: ${itemsError.message}`);
-      }
-
-      // 3. Send notification to Telegram bot
-      try {
-        await notifyNewOrder(order, cart, customerInfo);
-      } catch (notifyError) {
-        console.error('Telegram notification error:', notifyError);
-        // Don't throw here, as the order was still created successfully
-      }
-
-      // 4. Show success message and clear cart
-      toast.success('Order submitted successfully!');
-      get().clearCart();
+      set({ products, isLoading: false });
     } catch (error) {
-      console.error('Order submission error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to submit order. Please try again.');
-      throw error;
+      console.error('Error loading products:', error);
+      set({ error: (error as Error).message, isLoading: false });
+    }
+  },
+
+  // Fetch categories
+  fetchCategories: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const now = new Date().toISOString();
+      
+      // Add timestamps and convert IDs to UUIDs
+      const categories = categoryData.map(category => ({
+        ...category,
+        id: convertToUUID(category.id),
+        created_at: now,
+        updated_at: now
+      }));
+
+      set({ categories, isLoading: false });
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      set({ error: (error as Error).message, isLoading: false });
+    }
+  },
+
+  // Fetch tags
+  fetchTags: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const now = new Date().toISOString();
+      
+      // Add timestamps and convert IDs to UUIDs
+      const tags = tagData.map(tag => ({
+        ...tag,
+        id: convertToUUID(tag.id),
+        created_at: now,
+        updated_at: now
+      }));
+
+      set({ tags, isLoading: false });
+    } catch (error) {
+      console.error('Error loading tags:', error);
+      set({ error: (error as Error).message, isLoading: false });
+    }
+  },
+
+  // Submit order
+  submitOrder: async (orderData) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { cart } = get();
+      
+      // Generate order ID
+      const orderId = uuidv4();
+      
+      // Create order items from cart
+      const orderItems = cart.map(item => ({
+        id: uuidv4(),
+        order_id: orderId,
+        product_id: item.product.id,
+        quantity: item.quantity,
+        price: item.product.price
+      }));
+
+      // Here you would typically send this to your backend
+      console.log('Order submitted:', { orderId, orderData, orderItems });
+      
+      // Clear the cart after successful order
+      get().clearCart();
+      
+      set({ isLoading: false });
+    } catch (error) {
+      console.error('Error submitting order:', error);
+      set({ error: (error as Error).message, isLoading: false });
     }
   },
 }));

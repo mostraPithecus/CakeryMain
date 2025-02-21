@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Phone,
   Instagram,
@@ -10,49 +10,23 @@ import {
   Star,
   ChevronLeft,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 import { useStore } from './lib/store';
-import { Toaster } from 'react-hot-toast';
-import type { Order } from './lib/database.types';
+import { Toaster, toast } from 'react-hot-toast';
+import type { Order, Product } from './lib/database.types';
+import { sendToTelegram } from './lib/telegram';
+import ProductGrid from './components/ProductGrid';
 
-interface Cake {
-  name: string;
-  price: string;
-  image: string;
+interface OrderFormData extends Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'> {
+  contactMethod: 'phone' | 'telegram' | 'whatsapp' | 'social';
 }
 
-const cakes: Cake[] = [
-  {
-    name: 'Classic Wedding Cake',
-    price: '299',
-    image: 'https://images.unsplash.com/photo-1623428187969-5da2dcea5eea?auto=format&fit=crop&q=80&w=800',
-  },
-  {
-    name: 'Birthday Celebration',
-    price: '149',
-    image: 'https://images.unsplash.com/photo-1621303837174-89787a7d4729?auto=format&fit=crop&q=80&w=800',
-  },
-  {
-    name: 'Chocolate Dream',
-    price: '179',
-    image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=800',
-  },
-  {
-    name: 'Fresh Fruit Paradise',
-    price: '199',
-    image: 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&q=80&w=800',
-  },
-  {
-    name: 'Elegant Anniversary',
-    price: '249',
-    image: 'https://images.unsplash.com/photo-1535254973040-607b474cb50d?auto=format&fit=crop&q=80&w=800',
-  },
-  {
-    name: 'Special Occasion',
-    price: '169',
-    image: 'https://images.unsplash.com/photo-1562777717-dc6984f65a63?auto=format&fit=crop&q=80&w=800',
-  },
-];
+interface CartItem {
+  product: Product;
+  quantity: number;
+  notes?: string | null;
+}
 
 const features = [
   {
@@ -98,52 +72,151 @@ const testimonials = [
   },
 ];
 
+const products: Product[] = [
+  {
+    id: '1',
+    name: 'Classic Wedding Cake',
+    description: 'Elegant three-tier wedding cake with white fondant and sugar flowers',
+    price: 299,
+    image_url: 'https://images.unsplash.com/photo-1623428187969-5da2dcea5eea?auto=format&fit=crop&q=80&w=800',
+    category_id: 'wedding',
+    tags: ['classic', 'wedding', 'fondant'],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    name: 'Birthday Celebration',
+    description: 'Colorful birthday cake with sprinkles and buttercream frosting',
+    price: 149,
+    image_url: 'https://images.unsplash.com/photo-1621303837174-89787a7d4729?auto=format&fit=crop&q=80&w=800',
+    category_id: 'birthday',
+    tags: ['birthday', 'colorful', 'buttercream'],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: '3',
+    name: 'Chocolate Dream',
+    description: 'Rich chocolate cake with ganache and chocolate shavings',
+    price: 179,
+    image_url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=800',
+    category_id: 'specialty',
+    tags: ['chocolate', 'ganache', 'rich'],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: '4',
+    name: 'Fresh Fruit Paradise',
+    description: 'Light sponge cake topped with fresh seasonal fruits',
+    price: 199,
+    image_url: 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&q=80&w=800',
+    category_id: 'fruit',
+    tags: ['fruit', 'light', 'fresh'],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: '5',
+    name: 'Elegant Anniversary',
+    description: 'Sophisticated two-tier cake with gold accents and roses',
+    price: 249,
+    image_url: 'https://images.unsplash.com/photo-1535254973040-607b474cb50d?auto=format&fit=crop&q=80&w=800',
+    category_id: 'anniversary',
+    tags: ['elegant', 'roses', 'gold'],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
 function App() {
+  const { products, cart, addToCart, removeFromCart, updateCartItem, clearCart, submitOrder, fetchProducts, fetchCategories, fetchTags } = useStore();
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
-  const [formData, setFormData] = useState<Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'> & { comments?: string }>({
+  const [formData, setFormData] = useState<OrderFormData>({
     customer_name: '',
     phone: '',
     email: null,
     whatsapp: null,
+    telegram: null,
     instagram: null,
     facebook: null,
-    comments: ''
+    comments: null,
+    contactMethod: 'phone'
   });
-  const submitOrder = useStore(state => state.submitOrder);
-  const addToCart = useStore(state => state.addToCart);
-  const removeFromCart = useStore(state => state.removeFromCart);
-  const updateCartItem = useStore(state => state.updateCartItem);
-  const cart = useStore(state => state.cart);
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  
+  useEffect(() => {
+    console.log('App mounted, fetching data...');
+    fetchProducts();
+    fetchCategories();
+    fetchTags();
+  }, [fetchProducts, fetchCategories, fetchTags]);
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (cart.length === 0) {
+      toast.error('Please add items to your cart first');
+      return;
+    }
+
     try {
-      await submitOrder({
-        customer_name: formData.customer_name,
-        phone: formData.phone,
-        email: formData.email || null,
-        whatsapp: formData.whatsapp || null,
-        instagram: formData.instagram || null,
-        facebook: formData.facebook || null,
-        comments: formData.comments || null,
-      });
+      // Prepare order data by omitting contactMethod
+      const { contactMethod, ...orderData } = formData;
+
+      // Validate required fields based on contact method
+      if (contactMethod === 'phone' && !orderData.phone) {
+        toast.error('Please enter your phone number');
+        return;
+      }
+      if (contactMethod === 'telegram' && !orderData.telegram) {
+        toast.error('Please enter your Telegram username');
+        return;
+      }
+      if (contactMethod === 'whatsapp' && !orderData.whatsapp) {
+        toast.error('Please enter your WhatsApp number');
+        return;
+      }
+      if (contactMethod === 'social' && !orderData.instagram && !orderData.facebook) {
+        toast.error('Please enter at least one social media contact');
+        return;
+      }
+
+      // Create order with only the selected contact method
+      const order: Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'> = {
+        customer_name: orderData.customer_name,
+        phone: contactMethod === 'phone' ? orderData.phone : '',
+        email: orderData.email,
+        telegram: contactMethod === 'telegram' ? orderData.telegram : null,
+        whatsapp: contactMethod === 'whatsapp' ? orderData.whatsapp : null,
+        instagram: contactMethod === 'social' ? orderData.instagram : null,
+        facebook: contactMethod === 'social' ? orderData.facebook : null,
+        comments: orderData.comments
+      };
+
+      await submitOrder(order);
       
-      // Reset form after successful submission
+      // Reset form
       setFormData({
         customer_name: '',
         phone: '',
         email: null,
         whatsapp: null,
+        telegram: null,
         instagram: null,
         facebook: null,
-        comments: ''
+        comments: null,
+        contactMethod: 'phone'
       });
+      
+      // Show success message
+      toast.success('Order submitted successfully!');
     } catch (error) {
-      console.error('Failed to submit order:', error);
+      console.error('Error submitting order:', error);
+      toast.error('Failed to submit order. Please try again.');
     }
   };
 
@@ -187,41 +260,49 @@ function App() {
         </div>
       </section>
 
-      {/* Cake Catalog */}
+      {/* Best Sellers Section */}
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Our Best Sellers</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {cakes.map((cake, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-lg overflow-hidden">
-                <img src={cake.image} alt={cake.name} className="w-full h-64 object-cover" />
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold mb-2">{cake.name}</h3>
-                  <p className="text-[#8148B5] font-bold mb-4">${cake.price}</p>
-                  <div className="flex gap-2">
+            {products.slice(0, 3).map((product) => {
+              console.log('Best Seller product:', product.id, typeof product.id);
+              return (
+                <div key={product.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    className="w-full h-64 object-cover"
+                  />
+                  <div className="p-6">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="text-xl font-semibold">{product.name}</h3>
+                      <span className="text-[#8148B5] font-bold">${product.price}</span>
+                    </div>
+                    <p className="text-gray-600 mb-4">{product.description}</p>
                     <button
-                      onClick={() => {
-                        addToCart({
-                          id: crypto.randomUUID(),
-                          name: cake.name,
-                          price: parseFloat(cake.price),
-                          description: '',
-                          image_url: cake.image,
-                          category_id: crypto.randomUUID(),
-                          created_at: new Date().toISOString(),
-                          updated_at: new Date().toISOString(),
-                        }, 1);
-                        setIsCartOpen(true);
-                      }}
-                      className="flex-1 bg-[#8148B5] text-white py-2 rounded-md hover:bg-opacity-90 transition-all"
+                      onClick={() => addToCart(product)}
+                      className="w-full bg-[#8148B5] text-white px-4 py-2 rounded-md font-semibold hover:bg-opacity-90 transition-all flex items-center justify-center gap-2"
                     >
+                      <Plus className="w-5 h-5" />
                       Add to Cart
                     </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        </div>
+      </section>
+
+      {/* Full Product Catalog */}
+      <section className="py-20 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Our Full Catalog</h2>
+          <ProductGrid
+            products={products}
+            onAddToCart={(product) => addToCart(product)}
+          />
         </div>
       </section>
 
@@ -289,30 +370,30 @@ function App() {
                         <p className="text-[#8148B5]">${item.product.price * item.quantity}</p>
                         <div className="flex items-center gap-2 mt-2">
                           <button 
-                            onClick={() => updateCartItem(item.product.id, Math.max(0, item.quantity - 1), item.notes)}
+                            onClick={() => updateCartItem(item.product.id, Math.max(0, item.quantity - 1))}
                             className="bg-gray-200 text-gray-700 w-8 h-8 rounded flex items-center justify-center hover:bg-gray-300"
                           >
                             -
                           </button>
                           <span className="w-8 text-center">{item.quantity}</span>
                           <button 
-                            onClick={() => updateCartItem(item.product.id, item.quantity + 1, item.notes)}
+                            onClick={() => updateCartItem(item.product.id, item.quantity + 1)}
                             className="bg-gray-200 text-gray-700 w-8 h-8 rounded flex items-center justify-center hover:bg-gray-300"
                           >
                             +
                           </button>
+                          <button 
+                            onClick={() => removeFromCart(item.product.id)}
+                            className="text-red-500 hover:text-red-700"
+                            aria-label={`Remove ${item.product.name} from cart`}
+                            title={`Remove ${item.product.name} from cart`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => removeFromCart(item.product.id)}
-                        className="text-red-500 hover:text-red-700"
-                        aria-label={`Remove ${item.product.name} from cart`}
-                        title={`Remove ${item.product.name} from cart`}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -355,98 +436,234 @@ function App() {
               </div>
             ) : (
               <div className="bg-gray-50 p-4 rounded-md mb-4">
-                <h3 className="font-semibold mb-2">Order Summary:</h3>
+                <h3 className="font-semibold mb-4">Order Summary:</h3>
                 {cart.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center mb-2">
-                    <div>
-                      <span className="font-medium">{item.product.name}</span>
-                      <span className="text-gray-500 text-sm ml-2">x {item.quantity}</span>
+                  <div key={index} className="flex justify-between items-center mb-4 bg-white p-3 rounded-md shadow-sm">
+                    <div className="flex items-center gap-4">
+                      <img 
+                        src={item.product.image_url} 
+                        alt={item.product.name} 
+                        className="w-16 h-16 object-cover rounded-md"
+                      />
+                      <div>
+                        <div className="font-medium">{item.product.name}</div>
+                        <div className="text-gray-500 text-sm">
+                          ${item.product.price} × {item.quantity}
+                        </div>
+                      </div>
                     </div>
-                    <span>${item.product.price * item.quantity}</span>
+                    <div className="flex items-center gap-4">
+                      <div className="font-semibold">${item.product.price * item.quantity}</div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateCartItem(item.product.id, Math.max(0, item.quantity - 1))}
+                          className="p-1 hover:bg-gray-100 rounded"
+                        >
+                          -
+                        </button>
+                        <span className="w-8 text-center">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateCartItem(item.product.id, item.quantity + 1)}
+                          className="p-1 hover:bg-gray-100 rounded"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeFromCart(item.product.id)}
+                          className="ml-2 p-1 text-red-500 hover:bg-red-50 rounded"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
-                <div className="border-t pt-2 mt-2">
-                  <div className="flex justify-between items-center">
+                <div className="border-t pt-4 mt-4">
+                  <div className="flex justify-between items-center text-lg">
                     <strong>Total:</strong>
-                    <strong className="text-[#8148B5]">${totalPrice}</strong>
+                    <strong className="text-xl font-bold text-[#8148B5]">${totalPrice}</strong>
                   </div>
                 </div>
               </div>
             )}
-            <div>
-              <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-              <input
-                type="text"
-                id="customer_name"
-                value={formData.customer_name}
-                onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
-                required
-              />
+            
+            {/* Contact Information */}
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="name" className="block text-gray-700 font-medium mb-2">
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={formData.customer_name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, customer_name: e.target.value }))}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
+                />
+              </div>
+
+              {/* Contact Method Selection */}
+              <div>
+                <label className="block text-gray-700 font-medium mb-2">
+                  Preferred Contact Method
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { id: 'phone' as const, icon: 'phone', label: 'Phone' },
+                    { id: 'telegram' as const, icon: 'send', label: 'Telegram' },
+                    { id: 'whatsapp' as const, icon: 'message-circle', label: 'WhatsApp' },
+                    { id: 'social' as const, icon: 'users', label: 'Social Media' }
+                  ].map(method => (
+                    <button
+                      key={method.id}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          contactMethod: method.id,
+                          // Reset other contact fields when switching method
+                          phone: method.id === 'phone' ? prev.phone : '',
+                          whatsapp: method.id === 'whatsapp' ? prev.whatsapp : null,
+                          telegram: method.id === 'telegram' ? prev.telegram : null,
+                          instagram: method.id === 'social' ? prev.instagram : null,
+                          facebook: method.id === 'social' ? prev.facebook : null
+                        }));
+                      }}
+                      className={`p-3 rounded-lg border ${
+                        formData.contactMethod === method.id
+                          ? 'border-[#8148B5] bg-[#8148B5] text-white'
+                          : 'border-gray-300 hover:border-[#8148B5]'
+                      } transition-colors duration-200`}
+                    >
+                      {method.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dynamic Contact Field */}
+              {formData.contactMethod === 'phone' && (
+                <div>
+                  <label htmlFor="phone" className="block text-gray-700 font-medium mb-2">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
+                    placeholder="+1234567890"
+                  />
+                </div>
+              )}
+
+              {formData.contactMethod === 'telegram' && (
+                <div>
+                  <label htmlFor="telegram" className="block text-gray-700 font-medium mb-2">
+                    Telegram Username
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-gray-500">@</span>
+                    <input
+                      type="text"
+                      id="telegram"
+                      name="telegram"
+                      value={formData.telegram || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, telegram: e.target.value }))}
+                      required
+                      className="w-full px-4 py-2 pl-8 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
+                      placeholder="username"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formData.contactMethod === 'whatsapp' && (
+                <div>
+                  <label htmlFor="whatsapp" className="block text-gray-700 font-medium mb-2">
+                    WhatsApp Number
+                  </label>
+                  <input
+                    type="tel"
+                    id="whatsapp"
+                    name="whatsapp"
+                    value={formData.whatsapp || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, whatsapp: e.target.value }))}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
+                    placeholder="+1234567890"
+                  />
+                </div>
+              )}
+
+              {formData.contactMethod === 'social' && (
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="instagram" className="block text-gray-700 font-medium mb-2">
+                      Instagram Username
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-gray-500">@</span>
+                      <input
+                        type="text"
+                        id="instagram"
+                        name="instagram"
+                        value={formData.instagram || ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, instagram: e.target.value }))}
+                        className="w-full px-4 py-2 pl-8 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
+                        placeholder="username"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="facebook" className="block text-gray-700 font-medium mb-2">
+                      Facebook Profile URL
+                    </label>
+                    <input
+                      type="url"
+                      id="facebook"
+                      name="facebook"
+                      value={formData.facebook || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, facebook: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
+                      placeholder="https://facebook.com/..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="comments" className="block text-gray-700 font-medium mb-2">
+                  Additional Comments
+                </label>
+                <textarea
+                  id="comments"
+                  name="comments"
+                  value={formData.comments || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, comments: e.target.value }))}
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
+                  placeholder="Any special requests or notes..."
+                />
+              </div>
             </div>
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-              <input
-                type="tel"
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email (Optional)</label>
-              <input
-                type="email"
-                id="email"
-                value={formData.email || ''}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value || null })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
-              />
-            </div>
-            <div>
-              <label htmlFor="whatsapp" className="block text-sm font-medium text-gray-700 mb-1">WhatsApp (Optional)</label>
-              <input
-                type="tel"
-                id="whatsapp"
-                value={formData.whatsapp || ''}
-                onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value || null })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
-              />
-            </div>
-            <div>
-              <label htmlFor="instagram" className="block text-sm font-medium text-gray-700 mb-1">Instagram (Optional)</label>
-              <input
-                type="text"
-                id="instagram"
-                value={formData.instagram || ''}
-                onChange={(e) => setFormData({ ...formData, instagram: e.target.value || null })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
-              />
-            </div>
-            <div>
-              <label htmlFor="facebook" className="block text-sm font-medium text-gray-700 mb-1">Facebook (Optional)</label>
-              <input
-                type="text"
-                id="facebook"
-                value={formData.facebook || ''}
-                onChange={(e) => setFormData({ ...formData, facebook: e.target.value || null })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
-              />
-            </div>
-            <div>
-              <label htmlFor="comments" className="block text-sm font-medium text-gray-700 mb-1">Additional Comments</label>
-              <textarea
-                id="comments"
-                value={formData.comments || ''}
-                onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5] h-32 resize-none"
-              />
-            </div>
+
             <button
               type="submit"
-              className="w-full bg-[#8148B5] text-white px-8 py-3 rounded-md font-semibold hover:bg-opacity-90 transition-all"
+              disabled={cart.length === 0}
+              className={`w-full py-3 rounded-lg text-white font-semibold ${
+                cart.length === 0
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-[#8148B5] hover:bg-opacity-90'
+              } transition-colors duration-200`}
             >
               Place Order
             </button>

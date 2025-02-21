@@ -1,34 +1,39 @@
+export type UUID = string;
+
 export interface Product {
-  id: string;
+  id: UUID;
   name: string;
   description: string;
   price: number;
   image_url: string;
-  category_id: string;
+  category_id: UUID;
+  tags?: string[];
   created_at: string;
   updated_at: string;
 }
 
 export interface Category {
-  id: string;
+  id: UUID;
   name: string;
-  description: string;
+  description?: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface Tag {
-  id: string;
+  id: UUID;
   name: string;
+  description?: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface Order {
-  id: string;
+  id: UUID;
   customer_name: string;
   phone: string;
   email?: string | null;
+  telegram?: string | null;
   whatsapp?: string | null;
   instagram?: string | null;
   facebook?: string | null;
@@ -39,9 +44,9 @@ export interface Order {
 }
 
 export interface OrderItem {
-  id: string;
-  order_id: string;
-  product_id: string;
+  id: UUID;
+  order_id: UUID;
+  product_id: UUID;
   quantity: number;
   price: number;
   notes?: string | null;

@@ -8,6 +8,7 @@ export default defineConfig({
     open: true
   },
   resolve: {
-    extensions: ['.js', '.jsx', '.ts', '.tsx']
-  }
+    extensions: ['.js', '.jsx', '.ts', '.tsx', '.json']
+  },
+  assetsInclude: ['**/*.json']
 });
