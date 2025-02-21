@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Product, Category, Tag } from './database.types';
 import { v4 as uuidv4 } from 'uuid';
+import { sendToTelegram } from './telegram';
 
 // Import data from TypeScript file
 import { products as productData, categories as categoryData, tags as tagData } from '../data/data';
@@ -181,6 +182,9 @@ export const useStore = create<Store>((set, get) => ({
         quantity: item.quantity,
         price: item.product.price
       }));
+
+      // Send notification to Telegram
+      await sendToTelegram(orderData, cart);
 
       // Here you would typically send this to your backend
       console.log('Order submitted:', { orderId, orderData, orderItems });

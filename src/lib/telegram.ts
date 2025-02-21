@@ -3,6 +3,12 @@ import type { Order } from './database.types';
 const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
 
+// Log environment variables (without exposing full token)
+console.log('Telegram Config:', {
+  botToken: TELEGRAM_BOT_TOKEN ? `${TELEGRAM_BOT_TOKEN.slice(0, 10)}...` : 'Not set',
+  chatId: TELEGRAM_CHAT_ID || 'Not set'
+});
+
 // Rate limiting configuration
 const RATE_LIMIT = 20; // messages per minute
 const RATE_WINDOW = 60 * 1000; // 1 minute in milliseconds
@@ -61,6 +67,11 @@ ${order.comments ? `📝 Comments: ${order.comments}` : ''}
 `;
 
   try {
+    console.log('Sending Telegram message:', {
+      message,
+      url: `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN.slice(0, 10)}...}/sendMessage`
+    });
+
     messageCount++;
     const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
@@ -70,14 +81,17 @@ ${order.comments ? `📝 Comments: ${order.comments}` : ''}
       body: JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
         text: message,
-        parse_mode: 'HTML',
       }),
     });
 
+    const responseData = await response.json();
+    console.log('Telegram API response:', responseData);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`Telegram API error: ${JSON.stringify(responseData)}`);
     }
 
+    console.log('Telegram message sent successfully');
     return true;
   } catch (error) {
     console.error('Failed to send Telegram message:', error);
