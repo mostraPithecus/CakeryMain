@@ -1,7 +1,7 @@
 import type { Order } from './database.types';
 
-const TELEGRAM_BOT_TOKEN = '7617668048:AAHElZg8vrJopHG98g3burdmPOwN0xffqfk';
-const TELEGRAM_CHAT_ID = '537190136';
+const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
 
 // Rate limiting configuration
 const RATE_LIMIT = 20; // messages per minute
