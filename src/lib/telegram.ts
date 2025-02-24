@@ -3,11 +3,9 @@ import type { Order } from './database.types';
 const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
 
-// Log environment variables (without exposing full token)
-console.log('Telegram Config:', {
-  botToken: TELEGRAM_BOT_TOKEN ? `${TELEGRAM_BOT_TOKEN.slice(0, 10)}...` : 'Not set',
-  chatId: TELEGRAM_CHAT_ID || 'Not set'
-});
+if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+  console.error('Telegram configuration is missing. Please check your .env file.');
+}
 
 // Rate limiting configuration
 const RATE_LIMIT = 20; // messages per minute
@@ -43,35 +41,43 @@ export const sendToTelegram = async (
   order: Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'>,
   cart: Array<{ product: { name: string; price: number }; quantity: number }>
 ): Promise<boolean> => {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.error('Telegram configuration is missing');
+    return false;
+  }
+
   if (!checkRateLimit()) {
     console.error('Rate limit exceeded');
     return false;
   }
 
+  const items = cart.map((item) => ({
+    name: item.product.name,
+    quantity: item.quantity,
+    price: item.product.price * item.quantity
+  }));
+
+  const total = calculateTotal(cart) + (order.deliveryCost || 0);
+
   const message = `
 🎂 New Order!
 
 👤 Customer: ${order.customer_name}
-📱 Phone: ${order.phone}
-${order.email ? `📧 Email: ${order.email}` : ''}
-${order.whatsapp ? `📱 WhatsApp: ${order.whatsapp}` : ''}
-${order.instagram ? `📷 Instagram: ${order.instagram}` : ''}
-${order.facebook ? `👥 Facebook: ${order.facebook}` : ''}
+📞 Contact: ${order.phone || order.telegram || order.whatsapp || order.instagram || order.facebook || 'Not provided'}
 
-🛒 Order Details:
+🚚 Delivery: ${order.deliveryMethod}
+${order.deliveryMethod === 'delivery' ? `📍 Address: ${order.deliveryAddress}\n💰 Delivery Cost: €${order.deliveryCost}` : ''}
+
+🛒 Order Items:
 ${formatCartItems(cart)}
 
-💰 Total: $${calculateTotal(cart)}
+💶 Subtotal: €${calculateTotal(cart)}
+${order.deliveryCost ? `🚚 Delivery: €${order.deliveryCost}` : ''}
+💰 Total: €${total}
 
-${order.comments ? `📝 Comments: ${order.comments}` : ''}
-`;
+${order.comments ? `💭 Comments: ${order.comments}` : ''}`;
 
   try {
-    console.log('Sending Telegram message:', {
-      message,
-      url: `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN.slice(0, 10)}...}/sendMessage`
-    });
-
     messageCount++;
     const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
@@ -84,17 +90,19 @@ ${order.comments ? `📝 Comments: ${order.comments}` : ''}
       }),
     });
 
-    const responseData = await response.json();
-    console.log('Telegram API response:', responseData);
-
     if (!response.ok) {
-      throw new Error(`Telegram API error: ${JSON.stringify(responseData)}`);
+      const errorData = await response.json();
+      console.error('Telegram API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData.description || 'Unknown error'
+      });
+      return false;
     }
 
-    console.log('Telegram message sent successfully');
     return true;
   } catch (error) {
-    console.error('Failed to send Telegram message:', error);
+    console.error('Failed to send Telegram message');
     return false;
   }
 };

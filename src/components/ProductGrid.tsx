@@ -1,142 +1,96 @@
 import React, { useState, useMemo } from 'react';
-import type { Product, Tag } from '../lib/database.types';
-import { ProductCard } from './ProductCard';
+import type { Product } from '../lib/database.types';
+import { Plus, Flame, X, Image as ImageIcon } from 'lucide-react';
 import { useStore } from '../lib/store';
+import { Dialog } from '@headlessui/react';
+import { toast } from 'react-hot-toast';
 
 interface ProductGridProps {
   products: Product[];
   onAddToCart: (product: Product) => void;
 }
 
-type SortOption = 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc';
+type SortOption = 'name' | 'price-asc' | 'price-desc';
 
 const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddToCart }) => {
-  console.log('ProductGrid render, products:', products);
-  const { tags: allTags, categories: allCategories } = useStore();
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const { categories, tags } = useStore();
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [sortOption, setSortOption] = useState<SortOption>('price-asc');
+  const [sortOption, setSortOption] = useState<SortOption>('name');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  console.log('Current filters:', { selectedCategory, selectedTags, searchQuery });
-  console.log('Available products:', products);
-  console.log('All categories:', allCategories);
-  console.log('All tags:', allTags);
+  // Определяем бестселлеры (самые дорогие товары в каждой категории)
+  const bestSellers = useMemo(() => {
+    const bestSellersByCategory = new Map<string, Product>();
+    products.forEach(product => {
+      const currentBest = bestSellersByCategory.get(product.category_id);
+      if (!currentBest || product.price > currentBest.price) {
+        bestSellersByCategory.set(product.category_id, product);
+      }
+    });
+    return Array.from(bestSellersByCategory.values()).map(p => p.id);
+  }, [products]);
 
-  // Get unique categories with names
-  const categories = useMemo(() => {
-    console.log('Calculating categories from products:', products);
-    console.log('All categories:', allCategories);
-    return [
-      { id: 'all', name: 'All' },
-      ...allCategories
-    ];
-  }, [allCategories]);
-
-  // Get unique tags with names
-  const availableTags = useMemo(() => {
-    console.log('Getting available tags');
-    console.log('All tags:', allTags);
-    return allTags.map(tag => ({
-      id: tag.id,
-      name: tag.name
-    }));
-  }, [allTags]);
+  const toggleTag = (tagId: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tagId) 
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
+    );
+  };
 
   const filteredAndSortedProducts = useMemo(() => {
-    console.log('Filtering products with:', {
-      selectedCategory,
-      selectedTags,
-      searchQuery
-    });
-
     let filtered = [...products];
 
-    // Category filtering
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(product => {
-        const matches = product.category_id === selectedCategory;
-        console.log(`Category filter for ${product.name}:`, {
-          productCategoryId: product.category_id,
-          selectedCategory,
-          matches
-        });
-        return matches;
-      });
+    if (selectedCategory) {
+      filtered = filtered.filter(product => product.category_id === selectedCategory);
     }
 
-    // Search filtering
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(product => {
-        const matches = 
-          product.name.toLowerCase().includes(query) ||
-          product.description.toLowerCase().includes(query);
-        console.log(`Search filter for ${product.name}:`, { query, matches });
-        return matches;
-      });
-    }
-
-    // Tags filtering
     if (selectedTags.length > 0) {
-      filtered = filtered.filter(product => {
-        const productTags = product.tags || [];
-        const matches = selectedTags.every(tagId => productTags.includes(tagId));
-        console.log(`Tags filter for ${product.name}:`, {
-          productTags,
-          selectedTags,
-          matches
-        });
-        return matches;
-      });
+      filtered = filtered.filter(product => 
+        product.tags?.some(tagId => selectedTags.includes(tagId))
+      );
     }
 
-    console.log('Filtered products:', filtered);
-
-    // Sorting
     return filtered.sort((a, b) => {
       switch (sortOption) {
+        case 'name':
+          return a.name.localeCompare(b.name);
         case 'price-asc':
           return a.price - b.price;
         case 'price-desc':
           return b.price - a.price;
-        case 'name-asc':
-          return a.name.localeCompare(b.name);
-        case 'name-desc':
-          return b.name.localeCompare(a.name);
         default:
           return 0;
       }
     });
-  }, [products, selectedCategory, selectedTags, searchQuery, sortOption]);
+  }, [products, selectedCategory, selectedTags, sortOption]);
 
-  console.log('Filtered and sorted products:', filteredAndSortedProducts);
+  const handleAddToCart = (product: Product) => {
+    onAddToCart(product);
+    toast.success('Added to cart');
+  };
 
   return (
     <div className="space-y-6">
-      {/* Search and Filter Controls */}
       <div className="space-y-4">
-        {/* Search Input */}
-        <input
-          type="text"
-          placeholder="Search products..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
-        />
-
-        {/* Category Filter */}
         <div>
-          <h3 className="text-lg font-semibold mb-2">Categories</h3>
+          <h3 className="text-lg font-semibold mb-4">Categories</h3>
           <div className="flex flex-wrap gap-2">
-            {categories.map(category => (
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                selectedCategory === null
+                  ? 'bg-[#8148B5] text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              All Categories
+            </button>
+            {categories.map((category) => (
               <button
                 key={category.id}
-                onClick={() => {
-                  console.log('Setting category:', category.id);
-                  setSelectedCategory(category.id);
-                }}
+                onClick={() => setSelectedCategory(category.id)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   selectedCategory === category.id
                     ? 'bg-[#8148B5] text-white'
@@ -149,21 +103,13 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddToCart }) => {
           </div>
         </div>
 
-        {/* Tags Filter */}
         <div>
-          <h3 className="text-lg font-semibold mb-2">Tags</h3>
+          <h3 className="text-lg font-semibold mb-4">Tags</h3>
           <div className="flex flex-wrap gap-2">
-            {availableTags.map(tag => (
+            {tags.map((tag) => (
               <button
                 key={tag.id}
-                onClick={() => {
-                  console.log('Toggling tag:', tag.id);
-                  setSelectedTags(prev =>
-                    prev.includes(tag.id)
-                      ? prev.filter(id => id !== tag.id)
-                      : [...prev, tag.id]
-                  );
-                }}
+                onClick={() => toggleTag(tag.id)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   selectedTags.includes(tag.id)
                     ? 'bg-[#E57D8D] text-white'
@@ -176,41 +122,99 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddToCart }) => {
           </div>
         </div>
 
-        {/* Sort Options */}
         <div>
-          <h3 className="text-lg font-semibold mb-2">Sort By</h3>
+          <h3 className="text-lg font-semibold mb-4">Sort By</h3>
           <select
             value={sortOption}
             onChange={(e) => setSortOption(e.target.value as SortOption)}
             className="px-4 py-2 border border-gray-300 rounded-md focus:ring-[#8148B5] focus:border-[#8148B5]"
-            aria-label="Sort products"
-            title="Sort products"
           >
+            <option value="name">Name</option>
             <option value="price-asc">Price: Low to High</option>
             <option value="price-desc">Price: High to Low</option>
-            <option value="name-asc">Name: A to Z</option>
-            <option value="name-desc">Name: Z to A</option>
           </select>
         </div>
       </div>
 
-      {/* Product Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
         {filteredAndSortedProducts.map((product) => (
-          <ProductCard
+          <div
             key={product.id}
-            product={product}
-            onAddToCart={() => onAddToCart(product)}
-          />
+            className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow relative"
+          >
+            <div className="relative">
+              <img
+                src={product.image_url}
+                alt={product.name}
+                className="w-full h-32 sm:h-48 object-cover"
+              />
+              <button
+                onClick={() => setSelectedProduct(product)}
+                className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg hover:bg-white transition-colors flex items-center gap-2 text-sm font-medium text-gray-700"
+                title="View cake slice"
+              >
+                <ImageIcon className="w-4 h-4" />
+                <span>See Inside</span>
+              </button>
+            </div>
+            <div className="p-3 sm:p-4">
+              {bestSellers.includes(product.id) && (
+                <div className="inline-block mb-2 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1.5">
+                  <Flame className="w-4 h-4" />
+                  Most Popular
+                </div>
+              )}
+              <h3 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2 line-clamp-1">{product.name}</h3>
+              <p className="text-gray-600 mb-2 sm:mb-4 text-xs sm:text-sm line-clamp-2">{product.description}</p>
+              <div className="flex justify-between items-center">
+                <span className="text-base sm:text-lg font-bold">€{product.price}</span>
+                <button
+                  onClick={() => handleAddToCart(product)}
+                  className="bg-[#8148B5] text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-md font-semibold hover:bg-opacity-90 transition-all flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+                >
+                  <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                  Add to Cart
+                </button>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* No Results Message */}
-      {filteredAndSortedProducts.length === 0 && (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No products found matching your criteria</p>
+      {/* Модальное окно для просмотра фото в разрезе */}
+      <Dialog
+        open={selectedProduct !== null}
+        onClose={() => setSelectedProduct(null)}
+        className="relative z-50"
+      >
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+        
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto max-w-lg bg-white rounded-xl shadow-2xl">
+            <div className="relative">
+              <img
+                src={selectedProduct?.slice_image_url || selectedProduct?.image_url}
+                alt={`${selectedProduct?.name} slice view`}
+                className="w-full rounded-t-xl"
+              />
+              <button
+                onClick={() => setSelectedProduct(null)}
+                className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-2 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4">
+              <Dialog.Title className="text-lg font-semibold">
+                {selectedProduct?.name} - Slice View
+              </Dialog.Title>
+              <Dialog.Description className="text-sm text-gray-600 mt-1">
+                Take a closer look at our delicious cake layers
+              </Dialog.Description>
+            </div>
+          </Dialog.Panel>
         </div>
-      )}
+      </Dialog>
     </div>
   );
 };

@@ -4,8 +4,10 @@ export interface Product {
   id: UUID;
   name: string;
   description: string;
+  composition: string;
   price: number;
   image_url: string;
+  slice_image_url: string;
   category_id: UUID;
   tags?: string[];
   created_at: string;
@@ -39,6 +41,9 @@ export interface Order {
   facebook?: string | null;
   comments?: string | null;
   status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  deliveryMethod: 'pickup' | 'delivery' | null;
+  deliveryAddress?: string | null;
+  deliveryCost: number;
   created_at: string;
   updated_at: string;
 }

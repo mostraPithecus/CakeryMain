@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Phone,
   Instagram,
@@ -11,22 +11,33 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  ShoppingCart,
+  Minus,
+  X,
+  ShoppingBag,
 } from 'lucide-react';
 import { useStore } from './lib/store';
 import { Toaster, toast } from 'react-hot-toast';
-import type { Order, Product } from './lib/database.types';
+import type { Order, Product, Category, Tag } from './lib/database.types';
 import { sendToTelegram } from './lib/telegram';
 import ProductGrid from './components/ProductGrid';
+import DeliverySection from './components/DeliverySection';
 
 interface OrderFormData extends Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'> {
   contactMethod: 'phone' | 'telegram' | 'whatsapp' | 'social';
+  deliveryMethod: 'pickup' | 'delivery' | null;
+  deliveryAddress: string | null;
+  deliveryCost: number;
+  deliveryDistance: number;
+  isAddressConfirmed: boolean;
 }
 
 interface CartItem {
   product: Product;
   quantity: number;
-  notes?: string | null;
 }
+
+type SortOption = 'name' | 'price-asc' | 'price-desc';
 
 const features = [
   {
@@ -77,8 +88,10 @@ const products: Product[] = [
     id: '1',
     name: 'Classic Wedding Cake',
     description: 'Elegant three-tier wedding cake with white fondant and sugar flowers',
+    composition: 'Vanilla sponge layers\nVanilla buttercream\nFondant roses\nSugar flowers\nEdible pearls',
     price: 299,
     image_url: 'https://images.unsplash.com/photo-1623428187969-5da2dcea5eea?auto=format&fit=crop&q=80&w=800',
+    slice_image_url: 'https://images.unsplash.com/photo-1546379782-7b9235cf24ae?auto=format&fit=crop&q=80&w=800',
     category_id: 'wedding',
     tags: ['classic', 'wedding', 'fondant'],
     created_at: new Date().toISOString(),
@@ -88,8 +101,10 @@ const products: Product[] = [
     id: '2',
     name: 'Birthday Celebration',
     description: 'Colorful birthday cake with sprinkles and buttercream frosting',
+    composition: 'Vanilla sponge cake\nButtercream frosting\nRainbow sprinkles\nFondant decorations\nEdible glitter',
     price: 149,
-    image_url: 'https://images.unsplash.com/photo-1621303837174-89787a7d4729?auto=format&fit=crop&q=80&w=800',
+    image_url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=800',
+    slice_image_url: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&q=80&w=800',
     category_id: 'birthday',
     tags: ['birthday', 'colorful', 'buttercream'],
     created_at: new Date().toISOString(),
@@ -99,8 +114,10 @@ const products: Product[] = [
     id: '3',
     name: 'Chocolate Dream',
     description: 'Rich chocolate cake with ganache and chocolate shavings',
+    composition: 'Moist chocolate sponge cake\nRich chocolate ganache\nDark chocolate shavings\nEdible gold dust',
     price: 179,
     image_url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=800',
+    slice_image_url: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&q=80&w=800',
     category_id: 'specialty',
     tags: ['chocolate', 'ganache', 'rich'],
     created_at: new Date().toISOString(),
@@ -110,8 +127,10 @@ const products: Product[] = [
     id: '4',
     name: 'Fresh Fruit Paradise',
     description: 'Light sponge cake topped with fresh seasonal fruits',
+    composition: 'Light vanilla sponge cake\nFresh seasonal fruits\nWhipped cream\nEdible flowers',
     price: 199,
     image_url: 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&q=80&w=800',
+    slice_image_url: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&q=80&w=800',
     category_id: 'fruit',
     tags: ['fruit', 'light', 'fresh'],
     created_at: new Date().toISOString(),
@@ -121,8 +140,10 @@ const products: Product[] = [
     id: '5',
     name: 'Elegant Anniversary',
     description: 'Sophisticated two-tier cake with gold accents and roses',
+    composition: 'Moist vanilla sponge cake\nButtercream frosting\nFondant roses\nGold accents\nEdible pearls',
     price: 249,
     image_url: 'https://images.unsplash.com/photo-1535254973040-607b474cb50d?auto=format&fit=crop&q=80&w=800',
+    slice_image_url: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&q=80&w=800',
     category_id: 'anniversary',
     tags: ['elegant', 'roses', 'gold'],
     created_at: new Date().toISOString(),
@@ -131,9 +152,12 @@ const products: Product[] = [
 ];
 
 function App() {
-  const { products, cart, addToCart, removeFromCart, updateCartItem, clearCart, submitOrder, fetchProducts, fetchCategories, fetchTags } = useStore();
+  const { products, categories, tags, cart, addToCart, removeFromCart, updateCartItem, clearCart, submitOrder } = useStore();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [sortOption, setSortOption] = useState<SortOption>('name');
   const [formData, setFormData] = useState<OrderFormData>({
     customer_name: '',
     phone: '',
@@ -143,63 +167,108 @@ function App() {
     instagram: null,
     facebook: null,
     comments: null,
-    contactMethod: 'phone'
+    contactMethod: 'phone',
+    deliveryMethod: null,
+    deliveryAddress: '',
+    deliveryCost: 0,
+    deliveryDistance: 0,
+    isAddressConfirmed: false
   });
-  
+
+  // Handle delivery method change
+  const handleDeliveryMethodChange = (
+    method: 'pickup' | 'delivery' | null, 
+    deliveryCost?: number,
+    distance?: number
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      deliveryMethod: method,
+      deliveryAddress: method === 'pickup' ? '' : prev.deliveryAddress,
+      deliveryCost: deliveryCost || 0,
+      deliveryDistance: distance || 0,
+      isAddressConfirmed: false
+    }));
+  };
+
+  const handleAddressConfirm = (address: string, isConfirmed: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      deliveryAddress: address,
+      isAddressConfirmed: isConfirmed
+    }));
+  };
+
   useEffect(() => {
     console.log('App mounted, fetching data...');
-    fetchProducts();
-    fetchCategories();
-    fetchTags();
-  }, [fetchProducts, fetchCategories, fetchTags]);
+    useStore.getState().fetchProducts();
+    useStore.getState().fetchCategories();
+    useStore.getState().fetchTags();
+  }, []);
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const totalPrice = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0) + (formData.deliveryCost || 0);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     if (cart.length === 0) {
-      toast.error('Please add items to your cart first');
+      toast.error('Please add items to your cart before submitting the order.');
+      return;
+    }
+
+    if (!formData.deliveryMethod) {
+      toast.error('Please select a delivery method.');
+      return;
+    }
+
+    // Валидация контактных данных
+    if (!formData.customer_name) {
+      toast.error('Please enter your name.');
+      return;
+    }
+
+    if (formData.contactMethod === 'phone' && !formData.phone) {
+      toast.error('Please enter your phone number.');
+      return;
+    }
+
+    if (formData.contactMethod === 'telegram' && !formData.telegram) {
+      toast.error('Please enter your Telegram username.');
+      return;
+    }
+
+    if (formData.contactMethod === 'whatsapp' && !formData.whatsapp) {
+      toast.error('Please enter your WhatsApp number.');
       return;
     }
 
     try {
-      // Prepare order data by omitting contactMethod
-      const { contactMethod, ...orderData } = formData;
-
-      // Validate required fields based on contact method
-      if (contactMethod === 'phone' && !orderData.phone) {
-        toast.error('Please enter your phone number');
-        return;
-      }
-      if (contactMethod === 'telegram' && !orderData.telegram) {
-        toast.error('Please enter your Telegram username');
-        return;
-      }
-      if (contactMethod === 'whatsapp' && !orderData.whatsapp) {
-        toast.error('Please enter your WhatsApp number');
-        return;
-      }
-      if (contactMethod === 'social' && !orderData.instagram && !orderData.facebook) {
-        toast.error('Please enter at least one social media contact');
-        return;
-      }
-
-      // Create order with only the selected contact method
-      const order: Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'> = {
-        customer_name: orderData.customer_name,
-        phone: contactMethod === 'phone' ? orderData.phone : '',
-        email: orderData.email,
-        telegram: contactMethod === 'telegram' ? orderData.telegram : null,
-        whatsapp: contactMethod === 'whatsapp' ? orderData.whatsapp : null,
-        instagram: contactMethod === 'social' ? orderData.instagram : null,
-        facebook: contactMethod === 'social' ? orderData.facebook : null,
-        comments: orderData.comments
+      // Prepare the order data
+      const orderData = {
+        customer_name: formData.customer_name,
+        phone: formData.contactMethod === 'phone' ? formData.phone : '',
+        email: formData.email,
+        whatsapp: formData.contactMethod === 'whatsapp' ? formData.whatsapp : null,
+        telegram: formData.contactMethod === 'telegram' ? formData.telegram : null,
+        instagram: formData.contactMethod === 'social' ? formData.instagram : null,
+        facebook: formData.contactMethod === 'social' ? formData.facebook : null,
+        comments: formData.comments,
+        deliveryMethod: formData.deliveryMethod || 'pickup',
+        deliveryAddress: formData.deliveryMethod === 'delivery' ? formData.deliveryAddress : '',
+        deliveryCost: formData.deliveryMethod === 'delivery' ? formData.deliveryCost : 0,
+        items: cart.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.product.price
+        }))
       };
 
-      await submitOrder(order);
-      
-      // Reset form
+      // Submit the order
+      await submitOrder(orderData);
+
+      // Clear the cart and form
+      clearCart();
       setFormData({
         customer_name: '',
         phone: '',
@@ -209,9 +278,14 @@ function App() {
         instagram: null,
         facebook: null,
         comments: null,
-        contactMethod: 'phone'
+        contactMethod: 'phone',
+        deliveryMethod: null,
+        deliveryAddress: '',
+        deliveryCost: 0,
+        deliveryDistance: 0,
+        isAddressConfirmed: false
       });
-      
+
       // Show success message
       toast.success('Order submitted successfully!');
     } catch (error) {
@@ -220,85 +294,239 @@ function App() {
     }
   };
 
+  // Add to cart function
+  const addItemToCart = (product: Product, quantity: number = 1) => {
+    addToCart(product);
+    
+    // Показываем уведомление
+    toast.success(`${product.name} добавлен в корзину`);
+    // Открываем корзину
+    setIsCartOpen(true);
+  };
+
+  // Функция для переключения тегов
+  const toggleTag = (tagId: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tagId) 
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
+    );
+  };
+
+  // Фильтрация и сортировка продуктов
+  const filteredAndSortedProducts = useMemo(() => {
+    let filtered = [...products];
+
+    // Фильтрация по категории
+    if (selectedCategory) {
+      filtered = filtered.filter(product => product.category_id === selectedCategory);
+    }
+
+    // Фильтрация по тегам
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(product => 
+        product.tags?.some(tagId => selectedTags.includes(tagId))
+      );
+    }
+
+    // Сортировка
+    return filtered.sort((a, b) => {
+      switch (sortOption) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'price-asc':
+          return a.price - b.price;
+        case 'price-desc':
+          return b.price - a.price;
+        default:
+          return 0;
+      }
+    });
+  }, [products, selectedCategory, selectedTags, sortOption]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#8148B5] to-[#E57D8D]">
       <Toaster position="top-center" />
       
       {/* Header */}
-      <header className="fixed w-full bg-white/90 backdrop-blur-sm z-50">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-[#8148B5]">Sweet Creations</h2>
-          <div className="flex items-center gap-6">
-            <a href="tel:+1234567890" className="flex items-center gap-2 hover:text-[#8148B5]">
-              <Phone className="w-5 h-5" />
-              <span className="hidden md:inline">(123) 456-7890</span>
-            </a>
-            <a href="https://wa.me/1234567890" className="flex items-center gap-2 hover:text-[#8148B5]">
-              <MessageCircle className="w-5 h-5" />
-              <span className="hidden md:inline">WhatsApp</span>
-            </a>
-            <a href="https://instagram.com" className="flex items-center gap-2 hover:text-[#8148B5]">
-              <Instagram className="w-5 h-5" />
-              <span className="hidden md:inline">Instagram</span>
-            </a>
+      <header className="fixed top-0 left-0 right-0 bg-gradient-to-r from-[#8148B5] via-[#B671D1] to-[#E57D8D] text-white shadow-md z-50">
+        <div className="absolute inset-0 backdrop-blur-sm bg-white/10"></div>
+        <div className="container mx-auto px-4 relative">
+          <div className="h-20 flex items-center justify-between gap-8">
+            <h1 className="text-2xl font-bold text-white hover:text-white/90 transition-colors">Sweet Creations</h1>
+            
+            {/* Move cart button to the right side */}
+            <div className="flex items-center gap-6">
+              <a href="tel:+1234567890" className="flex items-center gap-2 text-white/90 hover:text-white transition-colors">
+                <Phone className="w-5 h-5" />
+                <span className="hidden md:inline">(123) 456-7890</span>
+              </a>
+              <a href="https://wa.me/1234567890" className="flex items-center gap-2 text-white/90 hover:text-white transition-colors">
+                <MessageCircle className="w-5 h-5" />
+                <span className="hidden md:inline">WhatsApp</span>
+              </a>
+              <a href="https://instagram.com" className="flex items-center gap-2 text-white/90 hover:text-white transition-colors">
+                <Instagram className="w-5 h-5" />
+                <span className="hidden md:inline">Instagram</span>
+              </a>
+              
+              {/* Cart Button */}
+              <button
+                onClick={() => setIsCartOpen(true)}
+                className="relative flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition-all duration-200 border border-white/20"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                <span className="hidden md:inline">Cart</span>
+                {cart.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-white text-[#E57D8D] text-xs w-5 h-5 rounded-full flex items-center justify-center shadow-lg font-semibold">
+                    {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
+      {/* Cart Modal */}
+      {isCartOpen && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100]" 
+            onClick={() => setIsCartOpen(false)}
+          />
+          <div 
+            className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-[101]" 
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="h-full flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-lg font-semibold">Shopping Cart</h2>
+                <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {cart.length === 0 ? (
+                  <p className="text-center text-gray-500 mt-4">Your cart is empty</p>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      {cart.map((item) => (
+                        <div key={item.product.id} className="flex items-center gap-4">
+                          <img
+                            src={item.product.image_url}
+                            alt={item.product.name}
+                            className="w-20 h-20 object-cover rounded-md"
+                          />
+                          <div className="flex-1">
+                            <h3 className="font-medium">{item.product.name}</h3>
+                            <p className="text-gray-500">€{item.product.price}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newQuantity = Math.max(0, item.quantity - 1);
+                                  if (newQuantity === 0) {
+                                    removeFromCart(item.product.id);
+                                    toast.success('Item removed from cart');
+                                  } else {
+                                    updateCartItem(item.product.id, newQuantity);
+                                    toast.success('Cart updated');
+                                  }
+                                }}
+                                className="p-1 rounded-full hover:bg-gray-100"
+                              >
+                                <Minus className="w-4 h-4" />
+                              </button>
+                              <span>{item.quantity}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateCartItem(item.product.id, item.quantity + 1);
+                                  toast.success('Cart updated');
+                                }}
+                                className="p-1 rounded-full hover:bg-gray-100"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeFromCart(item.product.id);
+                              toast.success('Item removed from cart');
+                            }}
+                            className="p-2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-6 pt-6 border-t">
+                      <div className="flex justify-between text-lg font-semibold">
+                        <span>Total</span>
+                        <span>€{cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0).toFixed(2)}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsCartOpen(false);
+                          document.getElementById('order-form')?.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="w-full mt-4 bg-[#8148B5] text-white px-6 py-3 rounded-md font-semibold hover:bg-opacity-90 transition-all"
+                      >
+                        Proceed to Order
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </> 
+      )}
+
+      {/* Mobile cart controls */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-lg sm:hidden z-50 flex items-center justify-between p-3 gap-3">
+        <button
+          onClick={() => setIsCartOpen(true)}
+          className="flex-1 bg-gray-100 text-gray-700 px-4 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+        >
+          <ShoppingCart className="w-5 h-5" />
+          <span>Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)})</span>
+        </button>
+        <button
+          onClick={() => document.getElementById('order-form')?.scrollIntoView({ behavior: 'smooth' })}
+          className="flex-1 bg-[#8148B5] text-white px-4 py-2.5 rounded-full font-medium hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
+        >
+          <ShoppingBag className="w-5 h-5" />
+          <span>Order Now</span>
+        </button>
+      </div>
+
       {/* Hero Section */}
       <section className="min-h-screen flex items-center justify-center relative pt-20">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1621303837174-89787a7d4729?auto=format&fit=crop&q=80&w=2000')] bg-cover bg-center opacity-20"></div>
-        <div className="container mx-auto px-4 text-center text-white relative">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1621303837174-89787a7d4729?ixlib=rb-4.0.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2940&q=80')] bg-cover bg-center"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-[#8148B5] to-[#E57D8D] opacity-80"></div>
+        <div className="container mx-auto px-4 text-center text-white relative z-10">
           <h1 className="text-4xl md:text-6xl font-bold mb-6">Perfect Custom Cakes for Any Occasion</h1>
           <p className="text-xl md:text-2xl mb-8 max-w-2xl mx-auto">Fresh, natural, and incredibly delicious cakes tailored just for you</p>
           <button
-            onClick={() => document.getElementById('order-form')?.scrollIntoView({ behavior: 'smooth' })}
+            onClick={() => document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })}
             className="bg-white text-[#8148B5] px-8 py-3 rounded-full text-lg font-semibold hover:bg-opacity-90 transition-all"
           >
-            Order Now
+            View Our Cakes
           </button>
         </div>
       </section>
 
-      {/* Best Sellers Section */}
-      <section className="py-20 bg-white">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Our Best Sellers</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {products.slice(0, 3).map((product) => {
-              console.log('Best Seller product:', product.id, typeof product.id);
-              return (
-                <div key={product.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
-                  <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="w-full h-64 object-cover"
-                  />
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-xl font-semibold">{product.name}</h3>
-                      <span className="text-[#8148B5] font-bold">${product.price}</span>
-                    </div>
-                    <p className="text-gray-600 mb-4">{product.description}</p>
-                    <button
-                      onClick={() => addToCart(product)}
-                      className="w-full bg-[#8148B5] text-white px-4 py-2 rounded-md font-semibold hover:bg-opacity-90 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Add to Cart
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* Full Product Catalog */}
-      <section className="py-20 bg-gray-50">
+      <section id="catalog" className="py-24 bg-gradient-to-b from-purple-100 via-pink-100 to-rose-100">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Our Full Catalog</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Our Cakes</h2>
           <ProductGrid
             products={products}
             onAddToCart={(product) => addToCart(product)}
@@ -306,191 +534,11 @@ function App() {
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-20 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Why Choose Us?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
-              <div key={index} className="text-center p-6">
-                <div className="text-[#8148B5] mb-4 flex justify-center">{feature.icon}</div>
-                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-gray-600">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Floating Cart Button */}
-      <button 
-        onClick={() => setIsCartOpen(true)}
-        className="fixed bottom-6 right-6 bg-[#8148B5] text-white p-4 rounded-full shadow-lg hover:bg-opacity-90 transition-all z-50 flex items-center gap-2"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-        {totalItems > 0 && (
-          <span className="bg-white text-[#8148B5] px-2 py-1 rounded-full text-sm font-bold">
-            {totalItems}
-          </span>
-        )}
-      </button>
-
-      {/* Cart Sidebar */}
-      {isCartOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
-          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-lg p-6 transform transition-transform">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Your Cart</h2>
-              <button 
-                onClick={() => setIsCartOpen(false)} 
-                className="text-gray-500 hover:text-gray-700"
-                aria-label="Close cart"
-                title="Close cart"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            {cart.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                Your cart is empty
-              </div>
-            ) : (
-              <>
-                <div className="space-y-4 mb-6">
-                  {cart.map((item, index) => (
-                    <div key={index} className="flex items-center gap-4 bg-gray-50 p-4 rounded-lg">
-                      <img src={item.product.image_url} alt={item.product.name} className="w-20 h-20 object-cover rounded" />
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{item.product.name}</h3>
-                        <p className="text-[#8148B5]">${item.product.price * item.quantity}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <button 
-                            onClick={() => updateCartItem(item.product.id, Math.max(0, item.quantity - 1))}
-                            className="bg-gray-200 text-gray-700 w-8 h-8 rounded flex items-center justify-center hover:bg-gray-300"
-                          >
-                            -
-                          </button>
-                          <span className="w-8 text-center">{item.quantity}</span>
-                          <button 
-                            onClick={() => updateCartItem(item.product.id, item.quantity + 1)}
-                            className="bg-gray-200 text-gray-700 w-8 h-8 rounded flex items-center justify-center hover:bg-gray-300"
-                          >
-                            +
-                          </button>
-                          <button 
-                            onClick={() => removeFromCart(item.product.id)}
-                            className="text-red-500 hover:text-red-700"
-                            aria-label={`Remove ${item.product.name} from cart`}
-                            title={`Remove ${item.product.name} from cart`}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="font-semibold">Total:</span>
-                    <span className="text-xl font-bold text-[#8148B5]">${totalPrice}</span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setIsCartOpen(false);
-                      document.getElementById('order-form')?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                    className="w-full bg-[#8148B5] text-white py-3 rounded-lg hover:bg-opacity-90 transition-all"
-                  >
-                    Proceed to Checkout
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-      
-      {/* Test Supabase Connection */}
-      <div className="fixed bottom-4 left-4 text-xs text-gray-500">
-        DB URL: {import.meta.env.VITE_SUPABASE_URL ? '✅' : '❌'}
-        <br />
-        Anon Key: {import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅' : '❌'}
-      </div>
-
       {/* Order Form */}
-      <section id="order-form" className="py-20 bg-white">
+      <section id="order-form" className="py-16 bg-gradient-to-b from-rose-100 to-pink-100">
         <div className="container mx-auto px-4 max-w-2xl">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Place Your Order</h2>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {cart.length === 0 ? (
-              <div className="text-red-500 text-center mb-4">
-                Please add at least one cake to your cart before submitting the order.
-              </div>
-            ) : (
-              <div className="bg-gray-50 p-4 rounded-md mb-4">
-                <h3 className="font-semibold mb-4">Order Summary:</h3>
-                {cart.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center mb-4 bg-white p-3 rounded-md shadow-sm">
-                    <div className="flex items-center gap-4">
-                      <img 
-                        src={item.product.image_url} 
-                        alt={item.product.name} 
-                        className="w-16 h-16 object-cover rounded-md"
-                      />
-                      <div>
-                        <div className="font-medium">{item.product.name}</div>
-                        <div className="text-gray-500 text-sm">
-                          ${item.product.price} × {item.quantity}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="font-semibold">${item.product.price * item.quantity}</div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => updateCartItem(item.product.id, Math.max(0, item.quantity - 1))}
-                          className="p-1 hover:bg-gray-100 rounded"
-                        >
-                          -
-                        </button>
-                        <span className="w-8 text-center">{item.quantity}</span>
-                        <button
-                          type="button"
-                          onClick={() => updateCartItem(item.product.id, item.quantity + 1)}
-                          className="p-1 hover:bg-gray-100 rounded"
-                        >
-                          +
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeFromCart(item.product.id)}
-                          className="ml-2 p-1 text-red-500 hover:bg-red-50 rounded"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div className="border-t pt-4 mt-4">
-                  <div className="flex justify-between items-center text-lg">
-                    <strong>Total:</strong>
-                    <strong className="text-xl font-bold text-[#8148B5]">${totalPrice}</strong>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Contact Information */}
             <div className="space-y-4">
               <div>
                 <label htmlFor="name" className="block text-gray-700 font-medium mb-2">
@@ -507,7 +555,14 @@ function App() {
                 />
               </div>
 
-              {/* Contact Method Selection */}
+              <div className="mb-8">
+                <DeliverySection
+                  onDeliveryMethodChange={handleDeliveryMethodChange}
+                  onAddressConfirm={handleAddressConfirm}
+                  googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
+                />
+              </div>
+
               <div>
                 <label className="block text-gray-700 font-medium mb-2">
                   Preferred Contact Method
@@ -546,7 +601,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Dynamic Contact Field */}
               {formData.contactMethod === 'phone' && (
                 <div>
                   <label htmlFor="phone" className="block text-gray-700 font-medium mb-2">
@@ -656,24 +710,92 @@ function App() {
               </div>
             </div>
 
+            <div className="space-y-3 mb-4">
+              {cart.length === 0 && (
+                <div className="flex items-center justify-between gap-4 text-red-500">
+                  <span>Please add at least one cake to your cart</span>
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="bg-[#8148B5] text-white px-4 py-2 rounded-full text-sm hover:bg-opacity-90 transition-colors whitespace-nowrap"
+                  >
+                    View Catalog
+                  </button>
+                </div>
+              )}
+              {cart.length > 0 && (!formData.deliveryMethod || (formData.deliveryMethod === 'delivery' && !formData.isAddressConfirmed)) && (
+                <div className="flex items-center justify-between gap-4 text-red-500">
+                  <span>
+                    {!formData.deliveryMethod 
+                      ? "Please select a delivery method"
+                      : "Please confirm delivery address"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('delivery-section')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="bg-[#8148B5] text-white px-4 py-2 rounded-full text-sm hover:bg-opacity-90 transition-colors whitespace-nowrap"
+                  >
+                    Choose Delivery
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="submit"
-              disabled={cart.length === 0}
-              className={`w-full py-3 rounded-lg text-white font-semibold ${
-                cart.length === 0
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-[#8148B5] hover:bg-opacity-90'
-              } transition-colors duration-200`}
+              disabled={!formData.deliveryMethod || (formData.deliveryMethod === 'delivery' && !formData.isAddressConfirmed)}
+              className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                (!formData.deliveryMethod || (formData.deliveryMethod === 'delivery' && !formData.isAddressConfirmed))
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-[#8148B5] text-white hover:bg-opacity-90'
+              }`}
             >
               Place Order
             </button>
+
+            {/* Order Summary */}
+            <div className="mt-6 border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4">Order Summary</h3>
+              <div className="space-y-2">
+                {cart.map((item) => (
+                  <div key={item.product.id} className="flex justify-between text-sm">
+                    <span>{item.quantity}x {item.product.name}</span>
+                    <span>€{(item.product.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+                
+                <div className="border-t pt-2 mt-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Subtotal</span>
+                    <span>€{cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0).toFixed(2)}</span>
+                  </div>
+                  
+                  {formData.deliveryMethod === 'delivery' && formData.isAddressConfirmed && (
+                    <>
+                      <div className="flex justify-between text-sm mt-2">
+                        <span>Delivery ({(formData.deliveryDistance / 1000).toFixed(1)} km)</span>
+                        <span>€{formData.deliveryCost.toFixed(2)}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        €2/km, minimum €5
+                      </div>
+                    </>
+                  )}
+                  
+                  <div className="flex justify-between font-semibold text-base mt-2 pt-2 border-t">
+                    <span>Total</span>
+                    <span>€{(cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0) + formData.deliveryCost).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </form>
         </div>
       </section>
 
       {/* Testimonials */}
-      <section className="py-20 bg-gray-50">
-        <div className="container mx-auto px-4">
+      <section className="py-16 bg-gradient-to-b from-pink-100 to-purple-100">
+        <div className="container mx-auto px-4 max-w-4xl">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">What Our Customers Say</h2>
           <div className="max-w-3xl mx-auto relative">
             <div className="bg-white rounded-lg shadow-lg p-8">
@@ -712,45 +834,63 @@ function App() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-[#8148B5] text-white py-12">
+      {/* Features */}
+      <section className="py-16 bg-gradient-to-b from-pink-100 to-purple-100">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="text-xl font-semibold mb-4">Contact Us</h3>
-              <div className="space-y-2">
-                <a href="tel:+1234567890" className="flex items-center gap-2 hover:text-gray-200">
-                  <Phone className="w-5 h-5" />
-                  (123) 456-7890
-                </a>
-                <a href="https://wa.me/1234567890" className="flex items-center gap-2 hover:text-gray-200">
-                  <MessageCircle className="w-5 h-5" />
-                  WhatsApp
-                </a>
-                <a href="https://instagram.com" className="flex items-center gap-2 hover:text-gray-200">
-                  <Instagram className="w-5 h-5" />
-                  @sweetcreations
-                </a>
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Why Choose Us?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature, index) => (
+              <div key={index} className="text-center p-6">
+                <div className="text-[#8148B5] mb-4 flex justify-center">{feature.icon}</div>
+                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
+                <p className="text-gray-600">{feature.description}</p>
               </div>
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold mb-4">Hours</h3>
-              <p>Monday - Friday: 9am - 6pm</p>
-              <p>Saturday: 10am - 4pm</p>
-              <p>Sunday: Closed</p>
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold mb-4">Location</h3>
-              <p>123 Baker Street</p>
-              <p>Sweet City, SC 12345</p>
-              <p>United States</p>
-            </div>
-          </div>
-          <div className="text-center mt-12 pt-8 border-t border-white/20">
-            <p>&copy; 2025 Sweet Creations. All rights reserved.</p>
+            ))}
           </div>
         </div>
-      </footer>
+      </section>
+
+      {/* Footer */}
+      <div className="pb-20 sm:pb-0">
+        <footer className="py-8 bg-gradient-to-b from-purple-100 to-[#8148B5]">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div>
+                <h3 className="text-xl font-semibold mb-4">Contact Us</h3>
+                <div className="space-y-2">
+                  <a href="tel:+1234567890" className="flex items-center gap-2 hover:text-gray-200">
+                    <Phone className="w-5 h-5" />
+                    (123) 456-7890
+                  </a>
+                  <a href="https://wa.me/1234567890" className="flex items-center gap-2 hover:text-gray-200">
+                    <MessageCircle className="w-5 h-5" />
+                    WhatsApp
+                  </a>
+                  <a href="https://instagram.com" className="flex items-center gap-2 hover:text-gray-200">
+                    <Instagram className="w-5 h-5" />
+                    @sweetcreations
+                  </a>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold mb-4">Hours</h3>
+                <p>Monday - Friday: 9am - 6pm</p>
+                <p>Saturday: 10am - 4pm</p>
+                <p>Sunday: Closed</p>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold mb-4">Location</h3>
+                <p>123 Baker Street</p>
+                <p>Sweet City, SC 12345</p>
+                <p>United States</p>
+              </div>
+            </div>
+            <div className="text-center mt-12 pt-8 border-t border-white/20">
+              <p>&copy; 2025 Sweet Creations. All rights reserved.</p>
+            </div>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
