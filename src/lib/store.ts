@@ -35,6 +35,7 @@ interface Store {
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   updateCartItem: (productId: string, quantity: number) => void;
+  updateCartItemProduct: (productId: string, updatedProduct: Product) => void;
   clearCart: () => void;
 
   // Data fetching
@@ -95,6 +96,16 @@ export const useStore = create<Store>((set, get) => ({
         ),
       });
     }
+  },
+
+  updateCartItemProduct: (productId, updatedProduct) => {
+    set(state => ({
+      cart: state.cart.map(item => 
+        item.product.id === productId 
+          ? { ...item, product: updatedProduct } 
+          : item
+      )
+    }));
   },
 
   clearCart: () => {

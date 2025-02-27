@@ -7,11 +7,15 @@ export interface Product {
   composition: string;
   price: number;
   image_url: string;
-  slice_image_url: string;
+  slice_image_url?: string;
+  additional_images?: string[];
   category_id: UUID;
-  tags?: string[];
-  created_at: string;
-  updated_at: string;
+  tags: string[];
+  is_custom_order: boolean;
+  weight_kg?: number;
+  customer_notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Category {

@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Leaf, Award, Clock, ThumbsUp, Phone, Instagram } from 'lucide-react';
 import ProductGrid from './ProductGrid';
-import { Product } from '../lib/database.types';
+import { Product, Category } from '../lib/database.types';
+import { toast } from 'react-hot-toast';
+import ConsultationButton from './ConsultationButton';
 
 interface MainPageProps {
   products: Product[];
+  categories: Category[];
   onAddToCart: (product: Product) => void;
+  onSwitchToPortfolio: () => void;
 }
 
 const features = [
@@ -31,49 +35,44 @@ const features = [
   },
 ];
 
-const testimonials = [
-  {
-    name: 'Sarah Johnson',
-    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=200',
-    text: 'The wedding cake exceeded our expectations! Absolutely stunning and delicious.',
-    rating: 5,
-  },
-  {
-    name: 'Michael Chen',
-    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200',
-    text: "Best birthday cake I've ever had. The attention to detail was incredible.",
-    rating: 5,
-  },
-  {
-    name: 'Emma Williams',
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200',
-    text: 'Professional service and amazing results. Will definitely order again!',
-    rating: 5,
-  },
-];
+const MainPage: React.FC<MainPageProps> = ({ products, categories, onAddToCart, onSwitchToPortfolio }) => {
+  const handleAddToCart = (product: Product) => {
+    onAddToCart(product);
+    toast.success(`Added ${product.name} to cart!`);
+  };
 
-export default function MainPage({ products, onAddToCart }: MainPageProps) {
   return (
-    <main>
+    <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
-      <section className="bg-gradient-to-b from-purple-100 to-white py-20">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="text-5xl font-bold mb-6 text-[#8148B5]">Sweet Delights</h1>
-          <p className="text-xl text-gray-600 mb-8">Creating unforgettable moments with our delicious cakes</p>
-          <a href="#products" className="inline-block bg-[#8148B5] text-white px-8 py-3 rounded-lg font-semibold hover:bg-opacity-90 transition-colors">
-            View Our Cakes
-          </a>
+      <section className="bg-gradient-to-r from-[#8148B5] to-[#E57D8D] text-white py-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+              Delicious Custom Cakes for Every Occasion
+            </h1>
+            <p className="text-xl mb-8">
+              Handcrafted with love using the finest ingredients
+            </p>
+            <a
+              href="#catalog"
+              className="bg-white text-[#8148B5] px-8 py-3 rounded-full font-semibold hover:bg-opacity-90 transition-all"
+            >
+              Design Your Cake
+            </a>
+          </div>
         </div>
       </section>
 
       {/* Features Section */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Why Choose Us</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
-              <div key={index} className="text-center p-6 rounded-lg bg-gray-50">
-                <div className="inline-block p-3 bg-purple-100 rounded-full mb-4 text-[#8148B5]">
+              <div
+                key={index}
+                className="text-center p-6 rounded-lg bg-gray-50 hover:shadow-lg transition-all"
+              >
+                <div className="text-[#8148B5] mb-4 flex justify-center">
                   {feature.icon}
                 </div>
                 <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
@@ -84,70 +83,58 @@ export default function MainPage({ products, onAddToCart }: MainPageProps) {
         </div>
       </section>
 
-      {/* Products Section */}
-      <section id="products" className="py-16 bg-gray-50">
+      {/* Catalog Section */}
+      <section id="catalog" className="py-16">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Our Cakes</h2>
-          <ProductGrid products={products} onAddToCart={onAddToCart} />
-        </div>
-      </section>
-
-      {/* Testimonials Section */}
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Customer Reviews</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className="bg-gray-50 p-6 rounded-lg">
-                <div className="flex items-center mb-4">
-                  <img
-                    src={testimonial.image}
-                    alt={testimonial.name}
-                    className="w-12 h-12 rounded-full mr-4"
-                  />
-                  <div>
-                    <h3 className="font-semibold">{testimonial.name}</h3>
-                    <div className="flex text-yellow-400">
-                      {Array.from({ length: testimonial.rating }).map((_, i) => (
-                        <span key={i}>★</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <p className="text-gray-600">{testimonial.text}</p>
-              </div>
-            ))}
+          <h2 className="text-3xl font-bold text-center mb-12">
+            Our Delicious Creations
+          </h2>
+          <ProductGrid
+            products={products}
+            categories={categories}
+            onAddToCart={handleAddToCart}
+            onSwitchToPortfolio={onSwitchToPortfolio}
+          />
+          <div className="mt-12">
+            <ConsultationButton onAddToCart={handleAddToCart} />
           </div>
         </div>
       </section>
 
       {/* Contact Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-8">Contact Us</h2>
-          <p className="text-xl text-gray-600 mb-8">
-            Have questions? We're here to help!
-          </p>
-          <div className="flex justify-center space-x-6">
-            <a
-              href="tel:+1234567890"
-              className="flex items-center text-gray-600 hover:text-[#8148B5]"
-            >
-              <Phone className="w-5 h-5 mr-2" />
-              <span>+1 234 567 890</span>
-            </a>
-            <a
-              href="https://instagram.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center text-gray-600 hover:text-[#8148B5]"
-            >
-              <Instagram className="w-5 h-5 mr-2" />
-              <span>@sweetdelights</span>
-            </a>
+      <section className="bg-white py-16">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl font-bold mb-8">Get in Touch</h2>
+            <div className="flex justify-center space-x-8">
+              <a
+                href="tel:+1234567890"
+                className="flex items-center text-[#8148B5] hover:text-[#E57D8D] transition-colors"
+              >
+                <Phone className="w-6 h-6 mr-2" />
+                <span>+123 456 7890</span>
+              </a>
+              <a
+                href="https://instagram.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center text-[#8148B5] hover:text-[#E57D8D] transition-colors"
+              >
+                <Instagram className="w-6 h-6 mr-2" />
+                <span>Follow us on Instagram</span>
+              </a>
+              <button
+                onClick={onSwitchToPortfolio}
+                className="flex items-center text-[#8148B5] hover:text-[#E57D8D] transition-colors"
+              >
+                <span>Switch to Portfolio</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
-    </main>
+    </div>
   );
-}
+};
+
+export default MainPage;

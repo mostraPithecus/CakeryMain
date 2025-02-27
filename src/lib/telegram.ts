@@ -25,10 +25,20 @@ const checkRateLimit = (): boolean => {
 };
 
 // Format cart items for Telegram message
-const formatCartItems = (cart: Array<{ product: { name: string; price: number }; quantity: number }>) => {
+const formatCartItems = (cart: Array<{ product: { name: string; price: number; is_custom_order?: boolean; composition?: string }; quantity: number }>) => {
   return cart
-    .map(item => `${item.quantity}x ${item.product.name} ($${item.product.price * item.quantity})`)
-    .join('\n');
+    .map(item => {
+      const baseText = `${item.quantity}x ${item.product.name} (€${(item.product.price * item.quantity).toFixed(2)})`;
+      
+      // Check if it's a custom cake and add details
+      if (item.product.is_custom_order && item.product.composition) {
+        const compositionLines = item.product.composition.split('\n');
+        return `${baseText}\n   📝 Custom Cake Details:\n   ${compositionLines.map(line => `   - ${line}`).join('\n')}`;
+      }
+      
+      return baseText;
+    })
+    .join('\n\n');
 };
 
 // Calculate total price
@@ -39,7 +49,7 @@ const calculateTotal = (cart: Array<{ product: { price: number }; quantity: numb
 // Send message to Telegram
 export const sendToTelegram = async (
   order: Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'>,
-  cart: Array<{ product: { name: string; price: number }; quantity: number }>
+  cart: Array<{ product: { name: string; price: number; is_custom_order?: boolean; composition?: string }; quantity: number }>
 ): Promise<boolean> => {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     console.error('Telegram configuration is missing');

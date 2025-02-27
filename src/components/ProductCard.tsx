@@ -1,139 +1,115 @@
 import React, { useState } from 'react';
 import type { Product } from '../lib/database.types';
-import { Plus, X } from 'lucide-react';
-import { useStore } from '../lib/store';
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
-  onAddToCart: () => void;
-  isBestSeller?: boolean;
+  onAddToCart: (product: Product) => void;
+  onClick: (product: Product) => void;
 }
 
-const ProductCard = ({ product, onAddToCart, isBestSeller }: ProductCardProps) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const { tags: allTags } = useStore();
-  
-  // Convert tag IDs to names
-  const tagNames = product.tags
-    ?.map(tagId => allTags.find(t => t.id === tagId)?.name)
-    .filter((name): name is string => name !== undefined) || [];
+const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, onClick }) => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const images = [
+    product.image_url,
+    ...(product.slice_image_url ? [product.slice_image_url] : []),
+    ...(product.additional_images || [])
+  ];
+
+  const nextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const prevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
 
   return (
-    <>
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition-transform relative">
-        {isBestSeller && (
-          <div className="absolute top-4 left-4 bg-[#8148B5] text-white px-3 py-1 rounded-full text-sm font-semibold z-10">
-            Best Seller
+    <div
+      onClick={() => onClick(product)}
+      className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transform transition-transform hover:scale-[1.02]"
+    >
+      <div className="relative aspect-square">
+        <img
+          src={images[currentImageIndex]}
+          alt={product.name}
+          className="w-full h-full object-cover"
+          onLoad={(e) => e.currentTarget.classList.add('opacity-100')}
+          style={{ opacity: 0, transition: 'opacity 0.3s ease-in-out' }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
+
+        {images.length > 1 && (
+          <>
+            <button
+              onClick={prevImage}
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/60 backdrop-blur-sm text-gray-800 p-1 rounded-full hover:bg-white/80"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={nextImage}
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/60 backdrop-blur-sm text-gray-800 p-1 rounded-full hover:bg-white/80"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+              {images.map((_, index) => (
+                <div
+                  key={index}
+                  className={`w-2 h-2 rounded-full ${
+                    index === currentImageIndex ? 'bg-white' : 'bg-white/50'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+        {product.is_custom_order && (
+          <div className="absolute top-2 right-2 bg-[#E57D8D] text-white px-2 py-1 rounded-full text-xs backdrop-blur-sm">
+            Индивидуальный заказ
           </div>
         )}
-        <div 
-          className="relative cursor-pointer" 
-          onClick={() => setIsModalOpen(true)}
-        >
-          <img
-            src={product.image_url}
-            alt={product.name}
-            className="w-full h-64 object-cover"
-          />
-          <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all flex items-center justify-center">
-            <span className="text-white opacity-0 hover:opacity-100 transition-opacity">
-              Click to view details
-            </span>
+        
+        <div className="absolute bottom-0 left-0 w-full p-3 text-white">
+          <h3 className="text-lg font-semibold text-white">{product.name}</h3>
+          <div className="flex justify-between items-center mt-1">
+            <div className="text-white font-semibold">
+              &euro;{product.price}
+              {product.weight_kg ? <span className="text-xs opacity-80 ml-1">/ {product.weight_kg}kg</span> : ''}
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddToCart(product);
+              }}
+              className="bg-gradient-to-r from-emerald-400 to-teal-500 text-white p-2 rounded-full hover:shadow-lg transition-all"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
           </div>
-        </div>
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-2">
-            <h3 className="text-xl font-semibold">{product.name}</h3>
-            <span className="text-[#8148B5] font-bold">${product.price}</span>
-          </div>
-          <p className="text-gray-600 mb-4">{product.description}</p>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {tagNames.map((tagName) => (
-              <span
-                key={tagName}
-                className="px-2 py-1 bg-gray-100 text-gray-600 text-sm rounded-full"
-              >
-                {tagName}
-              </span>
-            ))}
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddToCart();
-            }}
-            className="w-full bg-[#8148B5] text-white px-4 py-2 rounded-md font-semibold hover:bg-opacity-90 transition-all flex items-center justify-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            Add to Cart
-          </button>
         </div>
       </div>
 
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8">
-              <div>
-                <img
-                  src={product.image_url}
-                  alt={product.name}
-                  className="w-full h-64 object-cover rounded-lg mb-4"
-                />
-                <img
-                  src={product.slice_image_url}
-                  alt={`${product.name} slice view`}
-                  className="w-full h-64 object-cover rounded-lg"
-                />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold mb-4">{product.name}</h2>
-                <p className="text-gray-600 mb-6">{product.description}</p>
-                <div className="mb-6">
-                  <h3 className="font-semibold mb-2">Composition:</h3>
-                  <div className="whitespace-pre-line text-gray-600">
-                    {product.composition}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {tagNames.map((tagName) => (
-                    <span
-                      key={tagName}
-                      className="px-2 py-1 bg-gray-100 text-gray-600 text-sm rounded-full"
-                    >
-                      {tagName}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between mb-6">
-                  <span className="text-2xl font-bold text-[#8148B5]">
-                    ${product.price}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAddToCart();
-                      setIsModalOpen(false);
-                    }}
-                    className="bg-[#8148B5] text-white px-6 py-2 rounded-md font-semibold hover:bg-opacity-90 transition-all flex items-center gap-2"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Add to Cart
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div className="p-4 bg-white">
+        <p className="text-gray-600 text-sm mb-2 line-clamp-2">{product.description}</p>
+        
+        <div className="flex flex-wrap gap-1">
+          {product.tags && product.tags.slice(0, 3).map((tag, index) => (
+            <span key={index} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+              {tag}
+            </span>
+          ))}
+          {product.tags && product.tags.length > 3 && (
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+              +{product.tags.length - 3}
+            </span>
+          )}
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 };
 

@@ -6,6 +6,7 @@ interface DeliverySectionProps {
   onDeliveryMethodChange: (method: 'pickup' | 'delivery' | null, deliveryCost?: number, distance?: number) => void;
   onAddressConfirm: (address: string, isConfirmed: boolean) => void;
   googleMapsApiKey: string;
+  totalWeightKg?: number;
 }
 
 const libraries: ("places" | "geometry")[] = ["places", "geometry"];
@@ -33,17 +34,23 @@ const mapContainerStyle = {
 
 const COST_PER_KM = 2; // €2 per kilometer
 const MIN_DELIVERY_COST = 5; // Minimum €5 delivery cost
+const WEIGHT_SURCHARGE_PER_KG = 1; // €1 additional per kg over 5kg
 
-const calculateDeliveryCost = (distanceInMeters: number): number => {
+const calculateDeliveryCost = (distanceInMeters: number, totalWeightKg: number = 0): number => {
   const distanceInKm = distanceInMeters / 1000;
-  const cost = Math.max(MIN_DELIVERY_COST, Math.ceil(distanceInKm * COST_PER_KM));
-  return cost;
+  const baseCost = Math.max(MIN_DELIVERY_COST, Math.ceil(distanceInKm * COST_PER_KM));
+  
+  // Add weight surcharge for orders over 5kg
+  const weightSurcharge = Math.max(0, totalWeightKg - 5) * WEIGHT_SURCHARGE_PER_KG;
+  
+  return Math.ceil(baseCost + weightSurcharge);
 };
 
 const DeliverySection: React.FC<DeliverySectionProps> = ({ 
   onDeliveryMethodChange, 
   onAddressConfirm,
-  googleMapsApiKey 
+  googleMapsApiKey,
+  totalWeightKg = 0
 }) => {
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'delivery' | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(1);
@@ -107,7 +114,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
 
     setDeliveryAddress(place.formatted_address || '');
     setSelectedLocation(place.geometry.location);
-    const cost = calculateDeliveryCost(distance);
+    const cost = calculateDeliveryCost(distance, totalWeightKg);
     setDeliveryDistance(distance);
     setDeliveryCost(cost);
     setIsAddressConfirmed(true);
@@ -175,7 +182,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
         return; // Error already shown in calculateDistance
       }
 
-      const cost = calculateDeliveryCost(distance);
+      const cost = calculateDeliveryCost(distance, totalWeightKg);
       setDeliveryDistance(distance);
       setDeliveryCost(cost);
       setIsAddressConfirmed(true);
@@ -196,6 +203,11 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
     onDeliveryMethodChange(method, method === 'pickup' ? 0 : undefined);
   };
 
+  const handleDeliveryCostCalculation = useCallback((distanceInMeters: number) => {
+    const cost = calculateDeliveryCost(distanceInMeters, totalWeightKg);
+    onDeliveryMethodChange('delivery', cost, distanceInMeters);
+  }, [onDeliveryMethodChange, totalWeightKg]);
+
   return (
     <LoadScript 
       googleMapsApiKey={googleMapsApiKey}
@@ -211,7 +223,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
       <div className="space-y-6">
         {/* Delivery Method Selection */}
         <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Choose Delivery Method</h3>
+          <h3 id="delivery-method-header" className="text-lg font-medium text-gray-900 mb-4">Choose Delivery Method</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Pickup Option */}
             <button
@@ -232,6 +244,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
             {/* Delivery Option */}
             <button
               type="button"
+              data-method="delivery"
               onClick={() => handleDeliveryMethodChange('delivery')}
               className={`p-4 border rounded-lg text-left transition-colors ${
                 deliveryMethod === 'delivery'
@@ -299,14 +312,14 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({
             {deliveryDistance && deliveryCost && (
               <div className="mt-2 text-sm text-gray-600">
                 <p>Distance: {(deliveryDistance / 1000).toFixed(1)} km</p>
-                <p>Delivery Cost: €{deliveryCost}</p>
+                <p>Delivery Cost: &euro;{deliveryCost}</p>
               </div>
             )}
           </div>
         )}
 
         {/* Map */}
-        <div style={{ height: '400px', width: '100%' }}>
+        <div id="delivery-map" style={{ height: '400px', width: '100%' }}>
           <GoogleMap
             mapContainerStyle={mapContainerStyle}
             center={selectedLocation || (deliveryMethod === 'pickup' ? pickupPoints[0].position : defaultCenter)}

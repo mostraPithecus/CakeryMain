@@ -15,13 +15,17 @@ import {
   Minus,
   X,
   ShoppingBag,
+  Heart
 } from 'lucide-react';
 import { useStore } from './lib/store';
 import { Toaster, toast } from 'react-hot-toast';
 import type { Order, Product, Category, Tag } from './lib/database.types';
 import { sendToTelegram } from './lib/telegram';
 import ProductGrid from './components/ProductGrid';
+import { PortfolioGrid } from './components/PortfolioGrid';
 import DeliverySection from './components/DeliverySection';
+import ConsultationCakeModal from './components/ConsultationCake';
+import { portfolioItems, portfolioCategories } from './data/portfolio';
 
 interface OrderFormData extends Omit<Order, 'id' | 'status' | 'created_at' | 'updated_at'> {
   contactMethod: 'phone' | 'telegram' | 'whatsapp' | 'social';
@@ -96,6 +100,8 @@ const products: Product[] = [
     tags: ['classic', 'wedding', 'fondant'],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    is_custom_order: false,
+    weight_kg: 4.5
   },
   {
     id: '2',
@@ -109,6 +115,8 @@ const products: Product[] = [
     tags: ['birthday', 'colorful', 'buttercream'],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    is_custom_order: false,
+    weight_kg: 2.5
   },
   {
     id: '3',
@@ -122,6 +130,8 @@ const products: Product[] = [
     tags: ['chocolate', 'ganache', 'rich'],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    is_custom_order: false,
+    weight_kg: 2
   },
   {
     id: '4',
@@ -135,6 +145,8 @@ const products: Product[] = [
     tags: ['fruit', 'light', 'fresh'],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    is_custom_order: false,
+    weight_kg: 1.8
   },
   {
     id: '5',
@@ -148,11 +160,13 @@ const products: Product[] = [
     tags: ['elegant', 'roses', 'gold'],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    is_custom_order: false,
+    weight_kg: 3
   },
 ];
 
 function App() {
-  const { products, categories, tags, cart, addToCart, removeFromCart, updateCartItem, clearCart, submitOrder } = useStore();
+  const { products, categories, tags, cart, addToCart, removeFromCart, updateCartItem, updateCartItemProduct, clearCart, submitOrder } = useStore();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -174,6 +188,7 @@ function App() {
     deliveryDistance: 0,
     isAddressConfirmed: false
   });
+  const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
 
   // Handle delivery method change
   const handleDeliveryMethodChange = (
@@ -299,7 +314,7 @@ function App() {
     addToCart(product);
     
     // Показываем уведомление
-    toast.success(`${product.name} добавлен в корзину`);
+    toast.success(`${product.name} added to cart`);
     // Открываем корзину
     setIsCartOpen(true);
   };
@@ -422,7 +437,38 @@ function App() {
                           />
                           <div className="flex-1">
                             <h3 className="font-medium">{item.product.name}</h3>
-                            <p className="text-gray-500">€{item.product.price}</p>
+                            <p className="text-gray-500">&euro;{item.product.price}</p>
+                            
+                            {/* Display consultation notes for custom orders */}
+                            {item.product.is_custom_order && (
+                              <div className="mt-2">
+                                <details className="text-sm" open>
+                                  <summary className="cursor-pointer text-[#8148B5] font-medium">
+                                    {item.product.customer_notes ? "Your Notes for Baker" : "Add Notes for Baker"}
+                                  </summary>
+                                  <div className="mt-2 p-2 bg-gray-50 rounded-md">
+                                    <textarea
+                                      className="w-full p-2 border border-gray-300 rounded-md text-sm"
+                                      placeholder="Share your cake ideas, preferences, or requirements..."
+                                      defaultValue={item.product.customer_notes || ''}
+                                      rows={3}
+                                      onChange={(e) => {
+                                        // Update the product with the new notes
+                                        const updatedProduct = {
+                                          ...item.product,
+                                          customer_notes: e.target.value,
+                                          composition: `This is a custom cake that will be designed through consultation with our baker.\n\nAdditional notes: ${e.target.value || 'No notes provided'}\n\nOur team will contact you to discuss details.`
+                                        };
+                                        
+                                        // Update item in cart
+                                        updateCartItemProduct(item.product.id, updatedProduct);
+                                      }}
+                                    />
+                                  </div>
+                                </details>
+                              </div>
+                            )}
+                            
                             <div className="flex items-center gap-2 mt-2">
                               <button
                                 onClick={(e) => {
@@ -469,7 +515,7 @@ function App() {
                     <div className="mt-6 pt-6 border-t">
                       <div className="flex justify-between text-lg font-semibold">
                         <span>Total</span>
-                        <span>€{cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0).toFixed(2)}</span>
+                        <span>&euro;{cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0).toFixed(2)}</span>
                       </div>
                       <button
                         onClick={() => {
@@ -490,20 +536,25 @@ function App() {
       )}
 
       {/* Mobile cart controls */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-lg sm:hidden z-50 flex items-center justify-between p-3 gap-3">
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-[#8148B5] via-[#B671D1] to-[#E57D8D] backdrop-blur-sm shadow-lg sm:hidden z-50 flex items-center justify-between p-3 gap-3">
         <button
+          onClick={() => document.getElementById('order-section')?.scrollIntoView({ behavior: 'smooth' })}
+          className="flex-1 bg-white/20 hover:bg-white/30 text-white px-4 py-2.5 rounded-full font-medium transition-colors flex items-center justify-center gap-2 border border-white/20"
+        >
+          <Heart className="w-5 h-5" />
+          <span>Place Order</span>
+        </button>
+        <button 
           onClick={() => setIsCartOpen(true)}
-          className="flex-1 bg-gray-100 text-gray-700 px-4 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+          className="relative flex-1 bg-white/20 hover:bg-white/30 text-white px-4 py-2.5 rounded-full font-medium transition-colors flex items-center justify-center gap-2 border border-white/20"
         >
           <ShoppingCart className="w-5 h-5" />
-          <span>Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)})</span>
-        </button>
-        <button
-          onClick={() => document.getElementById('order-form')?.scrollIntoView({ behavior: 'smooth' })}
-          className="flex-1 bg-[#8148B5] text-white px-4 py-2.5 rounded-full font-medium hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
-        >
-          <ShoppingBag className="w-5 h-5" />
-          <span>Order Now</span>
+          <span>Cart</span>
+          {cart.length > 0 && (
+            <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white text-[#E57D8D] flex items-center justify-center text-xs font-bold">
+              {cart.length}
+            </div>
+          )}
         </button>
       </div>
 
@@ -524,20 +575,92 @@ function App() {
       </section>
 
       {/* Full Product Catalog */}
-      <section id="catalog" className="py-24 bg-gradient-to-b from-purple-100 via-pink-100 to-rose-100">
+      <section id="catalog" className="py-24 relative">
+        {/* Remove the decorative section divider at top */}
+        
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Our Cakes</h2>
-          <ProductGrid
-            products={products}
-            onAddToCart={(product) => addToCart(product)}
+          <div className="mb-12 text-center">
+            <div className="inline-block bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl shadow-lg border border-purple-100">
+              <span className="inline-block px-4 py-1 bg-purple-100 text-[#8148B5] rounded-full text-sm font-medium mb-3">GALLERY</span>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-800">Our Cake Collection</h2>
+              <p className="text-gray-600 mt-2 max-w-xl mx-auto">Browse our showcase of stunning cake designs for inspiration</p>
+            </div>
+          </div>
+          {/* Always show portfolio */}
+          <PortfolioGrid
+            items={portfolioItems}
+            categories={portfolioCategories}
+            onSwitchToProducts={() => {}} // Empty function since we want to hide constructor
           />
+          
+          {/* Add prominent consultation cake section */}
+          <div className="mt-16 max-w-5xl mx-auto">
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl shadow-lg overflow-hidden border border-purple-100">
+              <div className="p-8 md:p-10 flex flex-col md:flex-row items-center gap-8">
+                <div className="w-full md:w-7/12">
+                  <span className="inline-block px-4 py-1 bg-purple-100 text-[#8148B5] rounded-full text-sm font-medium mb-3">CUSTOM ORDER</span>
+                  <h3 className="text-2xl md:text-3xl font-bold mb-4">Need a Special Custom Cake?</h3>
+                  <p className="text-gray-600 mb-6">
+                    Skip the designer and work directly with our pastry chef to create your dream cake. 
+                    We'll discuss all details including flavor, design, decorations, and special requirements.
+                  </p>
+                  <div className="flex flex-wrap gap-4 mb-6">
+                    <div className="flex items-start gap-2">
+                      <div className="mt-1 text-green-500">✓</div>
+                      <div>
+                        <h4 className="font-medium">Professional Consultation</h4>
+                        <p className="text-sm text-gray-500">Direct communication with our pastry chef</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <div className="mt-1 text-green-500">✓</div>
+                      <div>
+                        <h4 className="font-medium">Custom Design</h4>
+                        <p className="text-sm text-gray-500">Tailored to your preferences and occasion</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      // Open the consultation modal instead of directly adding to cart
+                      setIsConsultationModalOpen(true);
+                    }}
+                    className="px-8 py-3 bg-gradient-to-r from-[#8148B5] to-[#B671D1] text-white rounded-lg shadow-md hover:bg-opacity-90 transition-all duration-300 flex items-center gap-2 font-medium"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    <span>Discuss with Baker</span>
+                  </button>
+                </div>
+                <div className="w-full md:w-5/12 flex justify-center">
+                  <img 
+                    src="https://imgur.com/qGTIKWX.jpg" 
+                    alt="Our Confectioner" 
+                    className="rounded-lg shadow-lg max-w-full md:max-w-xs h-auto object-cover"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+        
+        {/* Add visual divider at bottom of section */}
+        <div className="absolute bottom-0 left-0 right-0 h-8 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwJSIgaGVpZ2h0PSI3MHB4IiB2aWV3Qm94PSIwIDAgMTI4MCAxNDAiIHByZXNlcnZlQXNwZWN0UmF0aW89Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGcgZmlsbD0iI2ZmZmZmZiI+PHBhdGggZD0iTTEyODAgMy40QzEwNTAuNTkgMTggMTAxOS40IDg0Ljg5IDczNC40MiA4NC44OWMtMzIwIDAtMzIwLTg0LjMtNjQwLTg0LjNDNTkuNC41OSAyOC4yIDEuNiAwIDMuNFYxNDBoMTI4MHoiIGZpbGwtb3BhY2l0eT0iLjMiLz48cGF0aCBkPSJNMCAyNC4zMWM0My40Ni01LjY5IDk0LjU2LTkuMjUgMTU4LjQyLTkuMjUgMzIwIDAgMzIwIDg5LjI0IDY0MCA4OS4yNCAyNTYuMTMgMCAzMDcuMjgtNTcuMTYgNDgxLjU4LTgwVjE0MEgweiIgZmlsbC1vcGFjaXR5PSIuNSIvPjxwYXRoIGQ9Ik0xMjgwIDUxLjc2Yy0yMDEgMTIuNDktMjQyLjQzIDUzLjQtNTEzLjU4IDUzLjQtMzIwIDAtMzIwLTU3LTY0MC01Ny00OC44NS4wMS05MC4yMSAxLjM1LTEyNi40MiAzLjZWMTQwaDEyODB6Ii8+PC9nPjwvc3ZnPg==')]"></div>
       </section>
 
       {/* Order Form */}
-      <section id="order-form" className="py-16 bg-gradient-to-b from-rose-100 to-pink-100">
-        <div className="container mx-auto px-4 max-w-2xl">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Place Your Order</h2>
+      <section id="order-section" className="py-16 bg-gradient-to-b from-white to-pink-50 relative">
+        {/* Add decorative elements to make this section stand out */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden opacity-5 pointer-events-none">
+          <div className="absolute -right-10 top-10 w-72 h-72 bg-[#E57D8D] rounded-full"></div>
+          <div className="absolute -left-20 top-40 w-80 h-80 bg-[#8148B5] rounded-full"></div>
+        </div>
+        
+        <div className="container mx-auto px-4 max-w-2xl relative">
+          <div className="mb-12 text-center">
+            <span className="inline-block px-4 py-1 bg-pink-100 text-[#E57D8D] rounded-full text-sm font-medium mb-3">ORDER NOW</span>
+            <h2 className="text-3xl md:text-4xl font-bold">Place Your Order</h2>
+            <p className="text-gray-600 mt-2 max-w-xl mx-auto">Fill out the form below to order your perfect cake</p>
+          </div>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
               <div>
@@ -591,8 +714,8 @@ function App() {
                       }}
                       className={`p-3 rounded-lg border ${
                         formData.contactMethod === method.id
-                          ? 'border-[#8148B5] bg-[#8148B5] text-white'
-                          : 'border-gray-300 hover:border-[#8148B5]'
+                          ? 'bg-[#8148B5] text-white'
+                          : 'bg-white/20 hover:bg-white/30 border-gray-300'
                       } transition-colors duration-200`}
                     >
                       {method.label}
@@ -719,7 +842,7 @@ function App() {
                     onClick={() => document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })}
                     className="bg-[#8148B5] text-white px-4 py-2 rounded-full text-sm hover:bg-opacity-90 transition-colors whitespace-nowrap"
                   >
-                    View Catalog
+                    Design Your Cake
                   </button>
                 </div>
               )}
@@ -732,7 +855,14 @@ function App() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => document.getElementById('delivery-section')?.scrollIntoView({ behavior: 'smooth' })}
+                    onClick={() => {
+                      const deliveryMethodHeader = document.getElementById('delivery-method-header');
+                      if (deliveryMethodHeader) {
+                        deliveryMethodHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      } else {
+                        document.getElementById('delivery-section')?.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
                     className="bg-[#8148B5] text-white px-4 py-2 rounded-full text-sm hover:bg-opacity-90 transition-colors whitespace-nowrap"
                   >
                     Choose Delivery
@@ -760,34 +890,42 @@ function App() {
                 {cart.map((item) => (
                   <div key={item.product.id} className="flex justify-between text-sm">
                     <span>{item.quantity}x {item.product.name}</span>
-                    <span>€{(item.product.price * item.quantity).toFixed(2)}</span>
+                    <span>&euro;{(item.product.price * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
                 
                 <div className="border-t pt-2 mt-2">
                   <div className="flex justify-between text-sm">
                     <span>Subtotal</span>
-                    <span>€{cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0).toFixed(2)}</span>
+                    <span>&euro;{cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0).toFixed(2)}</span>
                   </div>
                   
                   {formData.deliveryMethod === 'delivery' && formData.isAddressConfirmed && (
                     <>
                       <div className="flex justify-between text-sm mt-2">
                         <span>Delivery ({(formData.deliveryDistance / 1000).toFixed(1)} km)</span>
-                        <span>€{formData.deliveryCost.toFixed(2)}</span>
+                        <span>&euro;{formData.deliveryCost.toFixed(2)}</span>
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
-                        €2/km, minimum €5
+                        &euro;2/km, minimum &euro;5
                       </div>
                     </>
                   )}
                   
                   <div className="flex justify-between font-semibold text-base mt-2 pt-2 border-t">
                     <span>Total</span>
-                    <span>€{(cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0) + formData.deliveryCost).toFixed(2)}</span>
+                    <span>&euro;{(cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0) + formData.deliveryCost).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                className="mt-4 flex items-center justify-center gap-2 w-full bg-white border border-[#8148B5] text-[#8148B5] py-2 px-4 rounded-lg hover:bg-purple-50 transition-colors duration-300"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>Review Cart</span>
+              </button>
             </div>
           </form>
         </div>
@@ -851,7 +989,7 @@ function App() {
       </section>
 
       {/* Footer */}
-      <div className="pb-20 sm:pb-0">
+      <div id="footer-section" className="pb-20 sm:pb-0">
         <footer className="py-8 bg-gradient-to-b from-purple-100 to-[#8148B5]">
           <div className="container mx-auto px-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -891,6 +1029,13 @@ function App() {
           </div>
         </footer>
       </div>
+
+      {/* Add the consultation modal */}
+      <ConsultationCakeModal 
+        isOpen={isConsultationModalOpen}
+        onClose={() => setIsConsultationModalOpen(false)}
+        onAddToCart={addToCart}
+      />
     </div>
   );
 }

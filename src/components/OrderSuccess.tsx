@@ -1,27 +1,32 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { CheckCircle } from 'lucide-react';
 
 const OrderSuccess: React.FC = () => {
-  const navigate = useNavigate();
-
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full bg-white p-8 rounded-lg shadow text-center">
-        <div className="text-green-500 mb-4">
-          <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 via-rose-50 to-amber-50">
+      <div className="max-w-lg w-full bg-white p-8 rounded-2xl shadow-lg">
+        <div className="flex flex-col items-center justify-center space-y-6">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+            <CheckCircle size={32} className="text-green-600" />
+          </div>
+          
+          {/* Success Message */}
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-4">Order Successfully Placed!</h2>
+            <p className="text-gray-600 mb-6">
+              We will contact you shortly to confirm your order.
+            </p>
+            
+            {/* Return Button */}
+            <Link 
+              to="/"
+              className="bg-[#D23369] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#A32651] transition-colors"
+            >
+              Return to Homepage
+            </Link>
+          </div>
         </div>
-        <h2 className="text-2xl font-bold mb-4">Заказ успешно оформлен!</h2>
-        <p className="text-gray-600 mb-6">
-          Мы свяжемся с вами в ближайшее время для подтверждения заказа.
-        </p>
-        <button
-          onClick={() => navigate('/')}
-          className="bg-pink-500 text-white py-2 px-4 rounded hover:bg-pink-600 transition-colors"
-        >
-          Вернуться на главную
-        </button>
       </div>
     </div>
   );
