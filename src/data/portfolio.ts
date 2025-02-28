@@ -25,6 +25,14 @@ export const portfolioCategories: PortfolioCategory[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
+  ,{
+  id: "bento-portfolio-0001",
+    name: "Bento Cakes",
+    description: "Small, beautifully decorated cakes designed for 1-2 people",
+    display_order: 4,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
 ];
 
 export const portfolioItems: PortfolioItem[] = [
@@ -36,6 +44,8 @@ export const portfolioItems: PortfolioItem[] = [
     price: 35,
     images: [
       "https://i.imgur.com/oLDoOcL.jpeg",
+      "https://imgur.com/viRT476.jpeg",
+      "https://i.imgur.com/0X95AOD.jpeg",
       "https://i.imgur.com/3W1pJO8.mp4"
     ],
     category_id: "specialty-portfolio-0001",
@@ -194,33 +204,145 @@ export const portfolioItems: PortfolioItem[] = [
     },
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
-   }
-  // ,{
-  //   id: "tiramisu-cake-0001",
-  //   name: "Tiramisu Cake",
-  //   description: "Classic Italian tiramisu in cake form with coffee-soaked layers",
-  //   composition: "Coffee-soaked sponge layers\nMascarpone cream\nCocoa dusting\nChocolate decoration",
-  //   price: 42,
-  //   images: [
-  //     "https://i.imgur.com/jFkjvSu.jpeg",
-  //     "https://images.unsplash.com/photo-1578985545062-69928b1d9587?q=80&w=989&auto=format&fit=crop"
-  //   ],
-  //   category_id: "specialty-portfolio-0001",
-  //   tags: ["tiramisu", "coffee", "mascarpone", "italian"],
-  //   weight_kg: 1.6,
-  //   completion_date: "2024-02-05",
-  //   customer_review: {
-  //     rating: 5,
-  //     text: "Just like authentic Italian tiramisu but in a beautiful cake form!",
-  //     customer_name: "Roberto",
-  //     review_date: "2024-02-07"
-  //   },
-  //   order_details: {
-  //     special_requests: "Extra coffee flavor",
-  //     occasion: "Dinner party",
-  //     serving_size: 10
-  //   },
-  //   created_at: new Date().toISOString(),
-  //   updated_at: new Date().toISOString()
-  // }
+   },
+  {
+    id: "bento-coconut-strawberry-0001",
+    name: "Coconut-Strawberry Bento Cake",
+    description: "Cute heart-shaped bento cake, perfect for a romantic treat for two",
+    composition: "Vanilla sponge cake with coconut flakes\nCheesecream filling\nStrawberry confit",
+    price: 25,
+    images: [
+      "https://imgur.com/39MdG1m.jpeg",
+      "https://imgur.com/s4JW810.jpeg"
+    ],
+    category_id: "bento-portfolio-0001",
+    tags: ["bento", "heart", "coconut", "strawberry", "cheesecream", "small cake"],
+    weight_kg: 0.55,
+    completion_date: "2025-02-14",
+    customer_review: {
+      rating: 5,
+      text: "This small cake was absolutely perfect for our anniversary date. Beautiful design and delicious taste!",
+      customer_name: "Anna",
+      review_date: "2025-02-15"
+    },
+    order_details: {
+      special_requests: "Extra strawberry confit",
+      occasion: "Anniversary",
+      serving_size: 2
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "bento-snickers-0001",
+    name: "Snickers Bento Cake",
+    description: "Delicious mini-sized Snickers cake, perfect indulgent treat for two",
+    composition: "Chocolate sponge cake\nCheesecream filling\nSalted caramel\nRoasted peanuts",
+    price: 25,
+    images: [
+      "https://imgur.com/MuLgvm5.jpeg",
+      "https://imgur.com/f2gsB1h.jpeg"
+    ],
+    category_id: "bento-portfolio-0001",
+    tags: ["bento", "snickers", "chocolate", "caramel", "peanuts", "small cake"],
+    weight_kg: 0.55,
+    completion_date: "2025-02-20",
+    customer_review: {
+      rating: 5,
+      text: "The flavor combination is amazing! Such a great cake for our date night. Looks and tastes fantastic!",
+      customer_name: "Mark",
+      review_date: "2025-02-22"
+    },
+    order_details: {
+      special_requests: "Extra peanuts on top",
+      occasion: "Date night",
+      serving_size: 2
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "bento-chocolate-cherry-0001",
+    name: "Chocolate Cherry Bento Cake",
+    description: "Elegant bento cake with rich chocolate and cherry flavors, perfect for a special occasion",
+    composition: "Chocolate sponge cake\nCheesecream with chocolate ganache\nCherry confit",
+    price: 25,
+    images: [
+      "https://imgur.com/OT1uGMI.jpeg",
+      "https://imgur.com/mNFZUe8.jpeg"
+    ],
+    category_id: "bento-portfolio-0001",
+    tags: ["bento", "chocolate", "cherry", "ganache", "small cake"],
+    weight_kg: 0.55,
+    completion_date: "2025-02-25",
+    customer_review: {
+      rating: 5,
+      text: "The chocolate and cherry combination is divine! Such a beautiful little cake with amazing flavor.",
+      customer_name: "Elena",
+      review_date: "2025-02-26"
+    },
+    order_details: {
+      special_requests: "Extra cherry confit",
+      occasion: "Birthday celebration",
+      serving_size: 2
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "bento-red-velvet-0001",
+    name: "Red Velvet Bento Cake",
+    description: "Tender red velvet cake with cream cheese frosting and strawberry filling, perfect for special moments",
+    composition: "Red velvet sponge cake\nCream cheese frosting\nStrawberry filling",
+    price: 25,
+    images: [
+      "https://imgur.com/7IFrCUE.jpeg",
+      "https://imgur.com/VMKRVGe.jpeg"
+    ],
+    category_id: "bento-portfolio-0001",
+    tags: ["bento", "red velvet", "cream cheese", "strawberry", "small cake"],
+    weight_kg: 0.55,
+    completion_date: "2025-02-27",
+    customer_review: {
+      rating: 5,
+      text: "This cake is stunning! The red velvet with strawberry is such a delightful combination. Perfect size for our anniversary.",
+      customer_name: "Julia",
+      review_date: "2025-02-28"
+    },
+    order_details: {
+      special_requests: "Extra cream cheese frosting",
+      occasion: "Anniversary",
+      serving_size: 2
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "blueberry-cake-0001",
+    name: "Blueberry Cream Cake",
+    description: "Tender sponge cake with cream cheese and blueberry filling. Light vanilla layers combined with creamy frosting and rich berry layers, creating a perfect taste balance. An ideal choice for lovers of delicate and refreshing desserts.",
+    composition: "Vanilla sponge cake\nCream cheese frosting\nBlueberry filling\nFresh berries decoration",
+    price: 75,
+    images: [
+      "https://imgur.com/kKpZ0Zg.jpeg",
+      "https://imgur.com/aZ7wJ4T.jpeg"
+    ],
+    category_id: "berry-portfolio-0001",
+    tags: ["berry", "blueberry", "cream cheese", "vanilla", "fresh berries"],
+    weight_kg: 2.3,
+    completion_date: "2025-02-26",
+    customer_review: {
+      rating: 5,
+      text: "This cake exceeded all my expectations! The blueberry filling was so fresh and the balance of flavors was perfect. Everyone at the party loved it!",
+      customer_name: "Maria",
+      review_date: "2025-02-27"
+    },
+    order_details: {
+      special_requests: "Extra berries on top",
+      occasion: "Birthday party",
+      serving_size: 15
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
 ];
